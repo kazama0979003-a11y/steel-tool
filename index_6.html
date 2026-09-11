@@ -1,0 +1,2654 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+</head>
+<body>
+<meta charset="UTF-8">
+<title>型鋼配料計算工具</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Excel export library. If the browser has no network access this simply
+     fails to define window.XLSX; the export button checks for that and shows
+     a friendly message instead of a broken/silent click. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --paper:#f4efe0;
+    --paper-raised:#fffaf0;
+    --paper-sunk:#ece2c8;
+    --ink:#2a2419;
+    --ink-soft:#6f6552;
+    --line:#ddd0ae;
+    --line-strong:#c2b184;
+    --accent:#2f5d8a;
+    --accent-ink:#ffffff;
+    --accent-soft:rgba(47,93,138,0.12);
+    --good:#3f8f5f;
+    --good-soft:rgba(63,143,95,0.14);
+    --warn:#a8791f;
+    --warn-soft:rgba(184,132,44,0.16);
+    --bad:#b23a2c;
+    --bad-soft:rgba(178,58,44,0.14);
+    --shadow:rgba(38,32,22,0.18);
+    --post:#c9962e;
+    --rail:#3f8f5f;
+    --sill:#c9962e;
+    --reinforce:#b23a2c;
+    --brace:#4fa8c9;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#1c1a14;
+      --paper-raised:#242019;
+      --paper-sunk:#191712;
+      --ink:#efe7d5;
+      --ink-soft:#b3a68c;
+      --line:#453c2c;
+      --line-strong:#5c5238;
+      --accent:#8bb3e0;
+      --accent-ink:#151a20;
+      --accent-soft:rgba(139,179,224,0.16);
+      --good:#6fbd8e;
+      --good-soft:rgba(111,189,142,0.16);
+      --warn:#d9a75a;
+      --warn-soft:rgba(217,167,90,0.16);
+      --bad:#e2695a;
+      --bad-soft:rgba(226,105,90,0.16);
+      --shadow:rgba(0,0,0,0.5);
+      --post:#e8bd5e;
+      --rail:#66b587;
+      --sill:#e8bd5e;
+      --reinforce:#e2695a;
+      --brace:#7bd0e8;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#1c1a14;
+    --paper-raised:#242019;
+    --paper-sunk:#191712;
+    --ink:#efe7d5;
+    --ink-soft:#b3a68c;
+    --line:#453c2c;
+    --line-strong:#5c5238;
+    --accent:#8bb3e0;
+    --accent-ink:#151a20;
+    --accent-soft:rgba(139,179,224,0.16);
+    --good:#6fbd8e;
+    --good-soft:rgba(111,189,142,0.16);
+    --warn:#d9a75a;
+    --warn-soft:rgba(217,167,90,0.16);
+    --bad:#e2695a;
+    --bad-soft:rgba(226,105,90,0.16);
+    --shadow:rgba(0,0,0,0.5);
+    --post:#e8bd5e;
+    --rail:#66b587;
+    --sill:#e8bd5e;
+    --reinforce:#e2695a;
+    --brace:#7bd0e8;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"IBM Plex Sans","Noto Sans TC",system-ui,sans-serif;
+    line-height:1.55;
+  }
+  ::selection{background:var(--accent-soft);}
+
+  .wrap{max-width:1240px;margin:0 auto;padding:26px 22px 60px;}
+
+  header.top{margin-bottom:22px;}
+  .eyebrow{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 8px;
+  }
+  h1{
+    font-family:"Big Shoulders Display","Noto Sans TC",sans-serif;
+    font-weight:800;font-size:clamp(26px,3.6vw,38px);
+    letter-spacing:.01em;margin:0 0 8px;text-wrap:balance;color:var(--ink);
+  }
+  .lede{max-width:76ch;color:var(--ink-soft);font-size:14.5px;margin:0;}
+
+  .grid{
+    display:grid;
+    grid-template-columns:340px 1fr;
+    gap:20px;
+    align-items:start;
+  }
+  @media (max-width:900px){ .grid{grid-template-columns:1fr;} }
+
+  .side{
+    position:sticky;top:20px;
+    display:flex;flex-direction:column;gap:16px;
+  }
+  @media (max-width:900px){ .side{position:static;} }
+
+  .card{
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:16px 18px 18px;
+  }
+  .card h2{
+    font-family:"Big Shoulders Display",sans-serif;
+    font-weight:700;font-size:16.5px;letter-spacing:.01em;
+    margin:0 0 3px;color:var(--ink);
+    display:flex;align-items:center;gap:8px;
+  }
+  .card .cardnote{font-size:11.5px;color:var(--ink-soft);margin:0 0 12px;}
+
+  .field{margin-bottom:11px;}
+  .field:last-child{margin-bottom:0;}
+  .field label{
+    display:block;font-size:12px;color:var(--ink-soft);margin-bottom:4px;
+    font-weight:500;
+  }
+  .field .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  input[type="text"],input[type="number"]{
+    width:100%;
+    font-family:"IBM Plex Mono",monospace;font-size:13.5px;
+    background:var(--paper);border:1px solid var(--line-strong);border-radius:7px;
+    padding:7px 9px;color:var(--ink);
+  }
+  input[type="text"]:focus,input[type="number"]:focus{
+    outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent);
+  }
+  .unit{font-size:11px;color:var(--ink-soft);margin-left:4px;}
+
+  .switch-row{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:8px 0;border-top:1px dashed var(--line);margin-top:10px;
+  }
+  .switch-row span{font-size:13px;color:var(--ink);}
+  .switch{
+    position:relative;width:38px;height:22px;flex-shrink:0;
+  }
+  .switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;}
+  .switch .track{
+    position:absolute;inset:0;background:var(--line-strong);border-radius:11px;
+    transition:background .15s ease;
+  }
+  .switch .knob{
+    position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;
+    background:var(--paper-raised);box-shadow:0 1px 2px var(--shadow);
+    transition:transform .15s ease;
+  }
+  .switch input:checked + .track{background:var(--accent);}
+  .switch input:checked + .track + .knob{transform:translateX(16px);}
+
+  .btnbar{display:flex;flex-wrap:wrap;gap:8px;}
+  button{
+    font-family:"IBM Plex Sans",sans-serif;font-size:12.5px;font-weight:600;
+    border-radius:7px;padding:8px 12px;cursor:pointer;
+    border:1px solid var(--line-strong);background:var(--paper);color:var(--ink);
+  }
+  button:hover{border-color:var(--accent);color:var(--accent);}
+  button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);}
+  button.primary:hover{opacity:.9;color:var(--accent-ink);}
+  button.ghost{background:transparent;}
+  button.small{padding:4px 9px;font-size:11.5px;}
+  button.danger:hover{border-color:var(--bad);color:var(--bad);}
+
+  .main{display:flex;flex-direction:column;gap:20px;}
+
+  .section-title{
+    font-family:"Big Shoulders Display",sans-serif;font-weight:700;
+    font-size:19px;margin:0 0 2px;color:var(--ink);
+    display:flex;align-items:baseline;gap:10px;
+  }
+  .section-title .idx{
+    font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--accent);
+  }
+  .section-sub{font-size:12.5px;color:var(--ink-soft);margin:0 0 12px;}
+
+  .stagecard{
+    background:var(--paper-raised);border:1px solid var(--line);border-radius:12px;
+    padding:14px;overflow-x:auto;
+  }
+  /* SVG carries explicit width/height attrs (its natural pixel size, which
+     can be wider than a narrow container like a gallery card); max-width:100%
+     + height:auto lets it shrink to fit instead of being clipped/scrollable —
+     it never stretches past its natural size, only shrinks when needed. */
+  svg.iso{display:block;margin:0 auto;overflow:visible;max-width:100%;height:auto;}
+  svg.iso .rig{filter:drop-shadow(0 3px 4px rgba(0,0,0,.28)) drop-shadow(0 1px 1px rgba(0,0,0,.16));}
+
+  /* Each construction "step" (both side rails together, then each tie beam,
+     each reinforce tie, then each post/brace/joint position) is wrapped in
+     its own <g class="step-group"> with --step set to its build order, so
+     the whole rig animates in as a staggered erection sequence rather than
+     popping into place instantly. Animating the GROUP's opacity/transform
+     (not the individual shapes) keeps each shape's own fill/opacity rules
+     (e.g. .beam-highlight's .55 opacity) intact once it's fully faded in. */
+  .step-group{
+    animation: assemblyIn .5s cubic-bezier(.2,.7,.3,1) both;
+    animation-delay: calc(var(--step, 0) * 80ms);
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  @keyframes assemblyIn{
+    from{ opacity:0; transform:translateY(-8px) scale(.92); }
+    to{ opacity:1; transform:translateY(0) scale(1); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .step-group{ animation:none !important; opacity:1 !important; transform:none !important; }
+  }
+  .stage-replay-btn{margin-left:auto;}
+  .beam{stroke-linejoin:round;}
+  .beam-rail{fill:var(--rail);stroke:color-mix(in srgb, var(--rail) 55%, black);stroke-width:1;}
+  .beam-tie{fill:var(--sill);stroke:color-mix(in srgb, var(--sill) 55%, black);stroke-width:1;}
+  .beam-reinforce{fill:var(--reinforce);stroke:color-mix(in srgb, var(--reinforce) 55%, black);stroke-width:1;}
+  .beam-post{fill:var(--post);stroke:color-mix(in srgb, var(--post) 55%, black);stroke-width:1;}
+  .beam-highlight{stroke:color-mix(in srgb, white 50%, transparent);stroke-width:1;opacity:.55;stroke-linecap:round;}
+  .brace-tri{fill:color-mix(in srgb, var(--brace) 80%, transparent);stroke:color-mix(in srgb, var(--brace) 50%, black);stroke-width:1.2;stroke-linejoin:round;}
+  .brace-tri.is-back{fill:color-mix(in srgb, var(--brace) 55%, transparent);}
+  .joint{fill:color-mix(in srgb, var(--ink) 65%, var(--paper-raised));stroke:var(--paper-raised);stroke-width:1;}
+  .dim-line{stroke:var(--ink-soft);stroke-width:1;}
+  .dim-tick{stroke:var(--ink-soft);stroke-width:1;}
+  .dim-bg{fill:var(--paper-raised);opacity:.92;}
+  .dim-text{fill:var(--ink);font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:600;}
+  .dim-text-soft{fill:var(--ink-soft);font-family:"IBM Plex Mono",monospace;font-size:10.5px;}
+
+  .legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:11.5px;color:var(--ink-soft);margin-top:10px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .legend .dot{width:10px;height:10px;border-radius:2px;display:inline-block;}
+
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--paper-raised);}
+  table{border-collapse:collapse;width:100%;min-width:560px;font-size:13px;}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap;}
+  th{
+    font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.07em;
+    text-transform:uppercase;color:var(--ink-soft);font-weight:600;
+    background:var(--paper-sunk);
+  }
+  td{font-variant-numeric:tabular-nums;}
+  td.num,th.num{text-align:right;font-family:"IBM Plex Mono",monospace;}
+  tr.total td{font-weight:700;border-bottom:none;border-top:2px solid var(--line-strong);}
+  tr:last-child td{border-bottom:none;}
+  .spec-mono{font-family:"IBM Plex Mono",monospace;font-size:12.5px;}
+
+  .pill{
+    display:inline-flex;align-items:center;gap:5px;
+    padding:3px 9px;border-radius:20px;font-size:11.5px;font-weight:600;
+    white-space:nowrap;
+  }
+  .pill.good{background:var(--good-soft);color:var(--good);}
+  .pill.warn{background:var(--warn-soft);color:var(--warn);}
+  .pill.bad{background:var(--bad-soft);color:var(--bad);}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+  @media (max-width:700px){ .kpis{grid-template-columns:repeat(2,1fr);} }
+  .kpi{
+    background:var(--paper-raised);border:1px solid var(--line);border-radius:12px;
+    padding:14px 16px;
+  }
+  .kpi .v{
+    font-family:"Big Shoulders Display",sans-serif;font-weight:800;font-size:26px;
+    color:var(--ink);line-height:1.1;
+  }
+  .kpi .v.bad{color:var(--bad);}
+  .kpi .v.good{color:var(--good);}
+  .kpi .l{font-size:11.5px;color:var(--ink-soft);margin-top:3px;}
+
+  .invtoolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;}
+  .invtoolbar .spacer{flex:1;}
+  .invtoolbar .count{font-size:12px;color:var(--ink-soft);font-family:"IBM Plex Mono",monospace;}
+
+  .inv-table input[type="text"],.inv-table input[type="number"]{
+    padding:4px 7px;font-size:12.5px;border-radius:5px;
+  }
+  .inv-table td{padding:5px 8px;}
+  .inv-table th{white-space:nowrap;}
+  .inv-check{width:16px;height:16px;cursor:pointer;accent-color:var(--accent);}
+  td.spec-cell input{width:110px;}
+  td.num-cell input{width:64px;text-align:right;font-family:"IBM Plex Mono",monospace;}
+  td.note-cell input{width:170px;}
+
+  details.invcollapse summary{
+    cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
+    font-family:"Big Shoulders Display",sans-serif;font-weight:700;font-size:19px;
+    color:var(--ink);margin-bottom:2px;
+  }
+  details.invcollapse summary::-webkit-details-marker{display:none;}
+  details.invcollapse summary .chev{
+    display:inline-block;transition:transform .15s ease;color:var(--accent);font-size:14px;
+  }
+  details.invcollapse[open] summary .chev{transform:rotate(90deg);}
+
+  .callout{
+    border:1px dashed var(--line-strong);border-radius:10px;
+    padding:10px 14px;font-size:12px;color:var(--ink-soft);line-height:1.5;
+    background:var(--paper-sunk);
+  }
+  .callout b{color:var(--ink);}
+
+  footer{margin-top:30px;padding-top:14px;border-top:1px solid var(--line);}
+  footer p{font-size:11.5px;color:var(--ink-soft);max-width:80ch;}
+
+  #fatal-banner{
+    display:none;position:fixed;top:0;left:0;right:0;z-index:9999;
+    background:#7a1f1f;color:#fff;padding:14px 20px;font-family:Arial,"Microsoft JhengHei",sans-serif;
+    font-size:14px;line-height:1.6;box-shadow:0 2px 8px rgba(0,0,0,.3);
+  }
+  #fatal-banner b{font-size:15px;}
+  #fatal-banner code{display:block;margin-top:6px;padding:8px;background:rgba(0,0,0,.25);
+    border-radius:4px;font-family:monospace;font-size:12px;white-space:pre-wrap;word-break:break-all;}
+
+  .toolbar-export{margin-top:14px;}
+  .groupcap-stat{display:flex;flex-wrap:wrap;align-items:center;gap:16px;}
+  .groupcap-stat .v{font-family:"Big Shoulders Display",sans-serif;font-weight:800;font-size:34px;line-height:1;}
+  .groupcap-stat .v.good{color:var(--good);}
+  .groupcap-stat .v.bad{color:var(--bad);}
+  .groupcap-stat .l{font-size:12.5px;color:var(--ink-soft);max-width:46ch;}
+  tr.bottleneck-row td{background:var(--bad-soft);}
+
+  .modal-overlay{
+    display:flex;position:fixed;inset:0;z-index:5000;
+    background:rgba(20,20,24,.55);align-items:flex-start;justify-content:center;
+    padding:40px 16px;overflow-y:auto;
+  }
+  .modal-overlay[hidden]{display:none;}
+  .modal-card{
+    background:#fff;border-radius:10px;max-width:560px;width:100%;
+    padding:22px 24px 20px;box-shadow:0 12px 40px rgba(0,0,0,.35);
+    max-height:calc(100vh - 80px);display:flex;flex-direction:column;
+  }
+  .modal-card-wide{max-width:920px;}
+  .modal-card h3{margin:0 0 4px;font-size:18px;}
+  .modal-card .modal-sub{font-size:12.5px;color:var(--ink-soft);margin:0 0 14px;}
+  .modal-body-scroll{overflow-y:auto;flex:1;}
+  .modal-checklist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;}
+  .modal-checklist li{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--line);}
+  .modal-checklist li:last-child{border-bottom:none;}
+  .modal-checklist input[type=checkbox]{width:16px;height:16px;flex:none;}
+  .modal-checklist label{flex:1;cursor:pointer;font-size:14px;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;}
+  .modal-close-x{position:absolute;top:14px;right:16px;background:none;border:none;font-size:18px;
+    cursor:pointer;color:var(--ink-soft);line-height:1;padding:4px;}
+  .modal-card{position:relative;}
+  .detail-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px 16px;margin-bottom:16px;}
+  .detail-grid .dg-item .dg-l{font-size:11.5px;color:var(--ink-soft);}
+  .detail-grid .dg-item .dg-v{font-size:15px;font-weight:700;}
+  .detail-section-title{font-size:14px;font-weight:700;margin:18px 0 8px;}
+  .detail-section-title:first-child{margin-top:0;}
+  .detail-mini-kpi{font-size:12px;color:var(--ink-soft);margin:8px 0 0;}
+
+  .spacer{flex:1;}
+
+  /* Without this, elements that set their own `display` (e.g. .grid, .main)
+     would win over the UA [hidden]{display:none} rule on a cascade tie,
+     so a "hidden" view would still render. This guarantees hidden always wins. */
+  [hidden]{display:none !important;}
+
+  /* ---- landing / view switcher ---- */
+  .view-home{padding-top:4px;}
+  .landing-intro{max-width:72ch;color:var(--ink-soft);font-size:13.5px;margin:0 0 20px;}
+  .landing-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;}
+  .landing-card{
+    display:flex;flex-direction:column;align-items:flex-start;gap:8px;text-align:left;
+    background:var(--paper-raised);border:1px solid var(--line);border-radius:14px;
+    padding:22px 20px;cursor:pointer;font-family:inherit;color:var(--ink);
+    transition:border-color .15s ease, transform .15s ease;
+  }
+  .landing-card:hover{border-color:var(--accent);color:var(--ink);transform:translateY(-2px);}
+  .landing-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  .landing-card .lc-icon{font-size:28px;line-height:1;}
+  .landing-card .lc-title{font-family:"Big Shoulders Display",sans-serif;font-weight:700;font-size:19px;}
+  .landing-card .lc-desc{font-size:12.5px;color:var(--ink-soft);line-height:1.5;}
+  .landing-card .lc-count{font-size:11px;color:var(--accent);font-family:"IBM Plex Mono",monospace;margin-top:2px;}
+
+  .view-header{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-bottom:2px;}
+  .view-header h2{margin:0;}
+
+  /* ---- gallery / photos ---- */
+  .gallery-project{margin-bottom:26px;}
+  .gallery-project:last-child{margin-bottom:0;}
+  .gallery-project-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px;}
+  .gallery-project-head .gp-name{font-family:"Big Shoulders Display",sans-serif;font-weight:700;font-size:16.5px;}
+  .gallery-project-head .gp-meta{font-size:11.5px;color:var(--ink-soft);}
+  .gallery-stage{max-width:680px;margin-bottom:8px;}
+  .gallery-photo-label{font-size:12px;color:var(--ink-soft);margin:0 0 8px;font-weight:600;}
+
+  /* ---- 歷史專案：篩選列 + 卡片式列表 ---- */
+  .filter-bar{
+    display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px;
+    margin:16px 0 14px;padding:12px 14px;
+    background:var(--paper-sunk);border:1px solid var(--line);border-radius:10px;
+  }
+  .filter-field{display:flex;flex-direction:column;gap:4px;}
+  .filter-field label{font-size:11.5px;color:var(--ink-soft);font-weight:500;}
+  .filter-field select{
+    font-family:"IBM Plex Sans",sans-serif;font-size:13px;
+    background:var(--paper-raised);border:1px solid var(--line-strong);border-radius:7px;
+    padding:6px 9px;color:var(--ink);min-width:140px;
+  }
+  .filter-field select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent);}
+  .filter-count{margin-left:auto;font-size:12px;color:var(--ink-soft);align-self:center;}
+
+  .project-card-grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;
+  }
+  .project-card{
+    position:relative;
+    background:var(--paper-raised);border:1px solid var(--line);border-radius:12px;
+    padding:16px 16px 14px;display:flex;flex-direction:column;gap:10px;
+  }
+  .project-card .pc-head{display:flex;align-items:flex-start;gap:8px;}
+  .project-card .pc-check{width:16px;height:16px;margin-top:3px;flex:none;accent-color:var(--accent);cursor:pointer;}
+  .project-card .pc-title{font-family:"Big Shoulders Display",sans-serif;font-weight:700;font-size:17px;color:var(--ink);line-height:1.25;}
+  .project-card .pc-loc{
+    display:inline-flex;align-items:center;font-size:11px;color:var(--accent);
+    background:var(--accent-soft);border-radius:20px;padding:2px 9px;margin-top:3px;
+  }
+  .project-card .pc-meta{font-size:12.5px;color:var(--ink-soft);line-height:1.6;}
+  .project-card .pc-meta b{color:var(--ink);font-weight:600;}
+  .project-card .pc-tags{display:flex;flex-wrap:wrap;align-items:center;gap:8px;}
+  .project-card .pc-time{font-size:11px;color:var(--ink-soft);}
+  .project-card .pc-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto;padding-top:8px;border-top:1px dashed var(--line);}
+  .project-card .pc-actions button{flex:1;min-width:64px;}
+  .project-card-empty{
+    grid-column:1/-1;color:var(--ink-soft);font-style:italic;font-size:13px;
+    border:1px dashed var(--line-strong);border-radius:10px;padding:20px;text-align:center;
+  }
+  .photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;}
+  .photo-thumb{
+    position:relative;border-radius:9px;overflow:hidden;border:1px solid var(--line);
+    background:var(--paper-sunk);aspect-ratio:4/3;
+  }
+  .photo-thumb img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in;}
+  .photo-thumb .photo-del{
+    position:absolute;top:5px;right:5px;width:22px;height:22px;border-radius:50%;
+    background:rgba(20,16,10,.62);color:#fff;border:none;cursor:pointer;font-size:12px;
+    line-height:1;padding:0;
+  }
+  .photo-thumb .photo-del:hover{background:var(--bad);color:#fff;border-color:var(--bad);}
+  .photo-add-tile{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+    border:1.5px dashed var(--line-strong);border-radius:9px;aspect-ratio:4/3;
+    cursor:pointer;color:var(--ink-soft);font-size:11.5px;text-align:center;padding:6px;
+  }
+  .photo-add-tile:hover{border-color:var(--accent);color:var(--accent);}
+  .photo-add-tile .plus{font-size:22px;line-height:1;}
+  .photo-empty{font-size:12px;color:var(--ink-soft);font-style:italic;padding:2px 0 10px;}
+
+  .lightbox-overlay{
+    display:flex;position:fixed;inset:0;z-index:6000;background:rgba(10,10,12,.82);
+    align-items:center;justify-content:center;padding:30px;
+  }
+  .lightbox-overlay[hidden]{display:none;}
+  .lightbox-overlay img{max-width:100%;max-height:86vh;border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,.5);}
+  .lightbox-overlay .modal-close-x{position:fixed;top:16px;right:20px;color:#fff;font-size:22px;}
+
+  /* ---- per-project print snapshot (kept off-screen; only shown for its own print) ---- */
+  #project-print-root{display:none;}
+  .print-proj-head h2{margin:0 0 4px;font-family:"Big Shoulders Display",sans-serif;}
+  .print-proj-head p{margin:0 0 2px;font-size:12.5px;color:var(--ink-soft);}
+
+  @media print{
+    .side, .toolbar-export, .invtoolbar, #fatal-banner, .modal-overlay, .lightbox-overlay{display:none !important;}
+    .grid{grid-template-columns:1fr !important;}
+    .inv-table th:last-child, .inv-table td:last-child{display:none !important;}
+    body{background:#fff;}
+    .card, .stagecard, .tablewrap, .kpi{break-inside:avoid;}
+    button{display:none !important;}
+    .print-hidden{display:none !important;}
+    #project-print-root.print-active{display:block !important;}
+    .step-group{animation:none !important; opacity:1 !important; transform:none !important;}
+  }
+</style>
+
+<!-- Plain ES5 guard, in its own script tag so it still runs even if the main
+     script below fails to parse (e.g. an older browser that chokes on modern
+     JS syntax). Converts a silent blank page into a visible diagnostic. -->
+<div id="fatal-banner"></div>
+<script>
+  window.onerror = function(msg, src, line, col, err){
+    var el = document.getElementById("fatal-banner");
+    if (!el) return;
+    el.style.display = "block";
+    var ua = navigator.userAgent;
+    el.innerHTML = "<b>這個瀏覽器沒辦法正常執行本工具的程式碼。</b><br>" +
+      "請改用較新版本的 Chrome、Edge 或 Firefox 開啟這個檔案（不要用 Internet Explorer）。" +
+      "如果已經是新版瀏覽器仍出現這個訊息，請把下面這行錯誤訊息截圖回報：" +
+      "<code>" + String(msg) + " (line " + line + ")\n" + ua + "</code>";
+  };
+</script>
+<noscript>
+  <div style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#7a1f1f;color:#fff;
+              padding:14px 20px;font-family:Arial,'Microsoft JhengHei',sans-serif;font-size:14px;">
+    這個工具需要開啟瀏覽器的 JavaScript 才能運作，請確認瀏覽器設定沒有停用 JavaScript。
+  </div>
+</noscript>
+
+<div class="wrap">
+  <header class="top">
+    <p class="eyebrow">TUNGHOSTEEL 東和鋼鐵 · 檔樁型鋼配料計算</p>
+    <h1>型鋼配料計算工具</h1>
+    <p class="lede">左邊輸入您要的檔樁長寬高與立柱支數，右邊維護目前的型鋼庫存清單——工具會自動算出所需支數規格、比對庫存與代用規格，並列出缺口採購建議與3D組立示意圖。比對邏輯與「型鋼需求.xlsx」的供需對照彙總表相同。</p>
+    <div class="btnbar toolbar-export" id="header-toolbar" hidden>
+      <button class="ghost" id="btn-back-home" type="button">‹ 返回首頁</button>
+      <span class="spacer"></span>
+      <button class="primary" id="btn-export-excel" type="button">匯出 Excel</button>
+      <button class="ghost" id="btn-print" type="button">列印報表</button>
+    </div>
+  </header>
+
+  <div class="view-home" id="view-home">
+    <p class="landing-intro">選擇下面其中一項開始：進行型鋼配料試算、查看／比較過去存過的專案，或瀏覽各專案的實際組立照片。</p>
+    <div class="landing-grid">
+      <button type="button" class="landing-card" data-view="calc">
+        <span class="lc-icon">🧮</span>
+        <span class="lc-title">開始計算</span>
+        <span class="lc-desc">輸入檔樁尺寸與庫存，自動算出型鋼需求明細、供需比對與可配組數。</span>
+      </button>
+      <button type="button" class="landing-card" data-view="projects">
+        <span class="lc-icon">🗂️</span>
+        <span class="lc-title">歷史專案</span>
+        <span class="lc-desc">查看、載入、比較或刪除已存過的專案，並可點進去看各專案的完整明細。</span>
+        <span class="lc-count" id="landing-projects-count"></span>
+      </button>
+      <button type="button" class="landing-card" data-view="gallery">
+        <span class="lc-icon">📷</span>
+        <span class="lc-title">歷史組立圖</span>
+        <span class="lc-desc">看每個專案的組立示意圖與實際完成照片，可以新增或刪除照片、直接列印。</span>
+        <span class="lc-count" id="landing-gallery-count"></span>
+      </button>
+    </div>
+  </div>
+
+  <div class="grid" id="view-calc" hidden>
+    <aside class="side">
+      <div class="card">
+        <h2>① 檔樁尺寸需求</h2>
+        <p class="cardnote">決定支數與單長的幾何輸入</p>
+        <div class="field">
+          <label for="in-railLen">全長（兩側地枕貫穿全長）<span class="unit">m</span></label>
+          <input type="number" id="in-railLen" value="16" min="1" step="0.5">
+        </div>
+        <div class="field">
+          <label for="in-tieLen">寬度（每節地枕寬）<span class="unit">m</span></label>
+          <input type="number" id="in-tieLen" value="8" min="1" step="0.5">
+        </div>
+        <div class="field row2">
+          <div>
+            <label for="in-colCount">立柱支數（偶數）</label>
+            <input type="number" id="in-colCount" value="8" min="2" step="2">
+          </div>
+          <div>
+            <label for="in-colLen">立柱高度<span class="unit">m</span></label>
+            <input type="number" id="in-colLen" value="5" min="0.5" step="0.5">
+          </div>
+        </div>
+        <div class="field">
+          <label for="in-braceLen">斜撐單長（上1＋下1示意）<span class="unit">m</span></label>
+          <input type="number" id="in-braceLen" value="2" min="0.5" step="0.5">
+        </div>
+        <div class="switch-row">
+          <span>含中間補強地枕</span>
+          <label class="switch">
+            <input type="checkbox" id="in-hasReinforce" checked>
+            <span class="track"></span><span class="knob"></span>
+          </label>
+        </div>
+        <div class="switch-row">
+          <span>含斜撐</span>
+          <label class="switch">
+            <input type="checkbox" id="in-hasBrace" checked>
+            <span class="track"></span><span class="knob"></span>
+          </label>
+        </div>
+        <div class="field" style="margin-top:10px;">
+          <label for="in-purchaseLen">標準採購型鋼長<span class="unit">m／支</span></label>
+          <input type="number" id="in-purchaseLen" value="12" min="1" step="0.5">
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>② 各構件規格指定</h2>
+        <p class="cardnote">同規格才會互相扣抵庫存；兩側地枕可填多組規格，用逗號分隔</p>
+        <div class="field">
+          <label for="spec-col">立柱</label>
+          <input type="text" id="spec-col" value="400 x 400">
+        </div>
+        <div class="field">
+          <label for="spec-rail">兩側地枕</label>
+          <input type="text" id="spec-rail" value="428 x 407, 394 x 398">
+        </div>
+        <div class="field">
+          <label for="spec-tie">立柱地枕（主／中間地枕）</label>
+          <input type="text" id="spec-tie" value="400 x 400">
+        </div>
+        <div class="field">
+          <label for="spec-reinforce">中間補強地枕</label>
+          <input type="text" id="spec-reinforce" value="364 x 371">
+        </div>
+        <div class="field">
+          <label for="spec-brace">斜撐</label>
+          <input type="text" id="spec-brace" value="700 x 300">
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>③ 噸位換算基準</h2>
+        <p class="cardnote">容量假設與地枕「全長」成正比，用於下方「05 噸位快算」反推需要幾組／尺寸</p>
+        <div class="field row2">
+          <div>
+            <label for="in-knownTons">已知總噸數<span class="unit">公噸</span></label>
+            <input type="number" id="in-knownTons" value="10000" min="0" step="100">
+          </div>
+          <div>
+            <label for="in-knownLen">已知全長合計<span class="unit">m</span></label>
+            <input type="number" id="in-knownLen" value="76" min="1" step="0.5">
+          </div>
+        </div>
+        <p class="cardnote" id="tonnage-ratio-note" style="margin:6px 0 0;">—</p>
+        <p class="cardnote" style="margin:4px 0 0;">預設值＝目前5組全長合計（維修區16＋304K區1號14＋304K區2號14＋1號台車16＋3號台車16＝76m）約可放1萬公噸，可依實際狀況調整。</p>
+      </div>
+
+      <div class="btnbar">
+        <button class="primary" id="btn-demo" type="button">套用維修區範例</button>
+        <button class="ghost" id="btn-reset" type="button">重設輸入</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section data-print-section="s01" data-print-label="01 3D組立預覽">
+        <h2 class="section-title"><span class="idx">01</span>3D組立預覽</h2>
+        <p class="section-sub">依左側尺寸即時繪製動畫組立過程，兩端立柱對齊地枕端點、中間補強地枕落在相鄰兩節正中間</p>
+        <div class="stagecard"><div id="stage-host"></div></div>
+        <div class="legend">
+          <span><span class="dot" style="background:var(--post)"></span>立柱</span>
+          <span><span class="dot" style="background:var(--rail)"></span>兩側地枕</span>
+          <span><span class="dot" style="background:var(--sill)"></span>立柱地枕</span>
+          <span><span class="dot" style="background:var(--reinforce)"></span>中間補強地枕</span>
+          <span><span class="dot" style="background:var(--brace)"></span>斜撐</span>
+          <button type="button" class="small stage-replay-btn" id="btn-replay-stage">▶ 重播組立動畫</button>
+        </div>
+      </section>
+
+      <section data-print-section="s02" data-print-label="02 型鋼需求明細（BOM）">
+        <h2 class="section-title"><span class="idx">02</span>型鋼需求明細（BOM）</h2>
+        <p class="section-sub">支數與小計依尺寸自動換算</p>
+        <div class="tablewrap">
+          <table id="bom-table">
+            <thead><tr><th>構件</th><th>規格</th><th class="num">單長</th><th class="num">支數</th><th class="num">小計(m)</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section data-print-section="s03" data-print-label="03 供需比對與採購建議">
+        <h2 class="section-title"><span class="idx">03</span>供需比對與採購建議</h2>
+        <p class="section-sub">同規格可用庫存＋近似規格可代用 → 缺口 → 需採購支數（邏輯同型鋼需求.xlsx）</p>
+        <div class="kpis" id="kpi-host"></div>
+        <div class="tablewrap" style="margin-top:12px;">
+          <table id="match-table">
+            <thead><tr>
+              <th>規格</th><th class="num">需求量(m)</th><th class="num">同規格庫存(m)</th>
+              <th class="num">代用庫存(m)</th><th class="num">不足(m)</th><th class="num">需採購支數</th><th>狀態</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="callout" style="margin-top:10px;">
+          <b>備註：</b>以上是「總長度」比對。若同規格庫存雖總長夠、但單支長度切不出所需尺寸（例如需求12m但庫存都是9m以下的短料），
+          仍需人工依實際可切割長度覆核調整採購支數。
+        </p>
+      </section>
+
+      <section data-print-section="s04" data-print-label="04 依目前庫存可配出幾組">
+        <h2 class="section-title"><span class="idx">04</span>依目前庫存可配出幾組</h2>
+        <p class="section-sub">以左側①②目前設定的「一組」用量估算——現有庫存（同規格＋可代用）÷ 每組需求量，逐規格取整數，再取最小值</p>
+        <div class="groupcap-stat card" id="groupcap-stat"></div>
+        <div class="tablewrap" style="margin-top:12px;">
+          <table id="groupcap-table">
+            <thead><tr>
+              <th>規格</th><th class="num">每組需求量(m)</th><th class="num">現有可用庫存(m)</th><th class="num">可配組數</th><th></th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="callout" id="groupcap-note" style="margin-top:10px;"></p>
+      </section>
+
+      <section data-print-section="s05" data-print-label="05 噸位快算（反推需要幾組／尺寸）">
+        <h2 class="section-title"><span class="idx">05</span>噸位快算（反推需要幾組／尺寸）</h2>
+        <p class="section-sub">依左側③設定的比例反推——這是「容量與全長成正比」的簡化假設，僅供初步規劃參考，正式評估請以實際承重數據為準</p>
+        <div class="field" style="max-width:320px;">
+          <label for="in-targetTons">目標鋼筋噸數<span class="unit">公噸</span></label>
+          <input type="number" id="in-targetTons" value="" min="0" step="100" placeholder="例如 6000">
+        </div>
+        <div class="kpis" id="tonnage-kpi-host" style="margin-top:12px;"></div>
+        <p class="callout" id="tonnage-note" style="margin-top:10px;"></p>
+      </section>
+
+      <section data-print-section="s07" data-print-label="07 庫存清單管理">
+        <details class="invcollapse" id="inv-details" open>
+          <summary><span class="chev">▸</span>⑦ 庫存清單管理<span class="idx" style="margin-left:6px;">(可編輯)</span></summary>
+          <p class="section-sub">逐支登錄目前庫存鋼料；「不用」代表保留給其他用途或品質不符，不列入本次可用範圍</p>
+          <div class="invtoolbar">
+            <button id="btn-load-sample" type="button">載入範例庫存（型鋼需求.xlsx）</button>
+            <button id="btn-add-row" type="button">＋ 新增一列</button>
+            <button id="btn-clear-inv" class="danger" type="button">清空庫存</button>
+            <span class="spacer"></span>
+            <span class="count" id="inv-count">0 列</span>
+          </div>
+          <div class="tablewrap">
+            <table class="inv-table" id="inv-table">
+              <thead><tr>
+                <th>規格</th><th class="num">單長(m)</th><th class="num">支數</th><th class="num">長度合計(m)</th>
+                <th>不用</th><th>可代用規格歸屬</th><th>用途備註</th><th></th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </details>
+      </section>
+    </main>
+  </div>
+
+  <div id="view-projects" class="main" hidden>
+    <div class="view-header">
+      <h2 class="section-title"><span class="idx">🗂️</span>歷史專案</h2>
+      <span id="storage-mode-badge-projects"></span>
+    </div>
+    <p class="section-sub">把①②③目前的設定連同試算結果存成一個專案（例如「維修區」「304K區1號」），之後可以載入回來繼續編輯、點「詳情」看完整明細與組立照片，或勾選多個專案並排比較</p>
+    <section data-print-section="s06" data-print-label="歷史專案清單">
+      <div class="card" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+        <div class="field" style="flex:1;min-width:180px;margin-bottom:0;">
+          <label for="proj-name">專案名稱</label>
+          <input type="text" id="proj-name" placeholder="例如：維修區">
+        </div>
+        <div class="field" style="flex:1;min-width:160px;margin-bottom:0;">
+          <label for="proj-location">地點</label>
+          <input type="text" id="proj-location" placeholder="例如：304K區">
+        </div>
+        <div class="btnbar" style="margin-bottom:0;">
+          <button class="primary" id="btn-save-project" type="button">存成專案</button>
+          <button class="ghost" id="btn-export-projects" type="button">匯出專案檔</button>
+          <button class="ghost" id="btn-import-projects" type="button">匯入專案檔</button>
+          <input type="file" id="file-import-projects" accept="application/json" style="display:none;">
+        </div>
+      </div>
+      <div class="filter-bar">
+        <div class="filter-field">
+          <label for="filter-location">地點</label>
+          <select id="filter-location"><option value="">全部地點</option></select>
+        </div>
+        <div class="filter-field">
+          <label for="filter-status">供需狀態</label>
+          <select id="filter-status">
+            <option value="">全部狀態</option>
+            <option value="good">庫存充足</option>
+            <option value="warn">缺口較小</option>
+            <option value="bad">缺口較大</option>
+          </select>
+        </div>
+        <span class="filter-count" id="filter-count"></span>
+      </div>
+      <div class="project-card-grid" id="project-cards"></div>
+      <div class="btnbar" style="margin-top:14px;">
+        <button id="btn-compare-projects" type="button">比較勾選的專案</button>
+      </div>
+      <div class="tablewrap" id="compare-wrap" style="margin-top:12px;display:none;">
+        <table id="compare-table"></table>
+      </div>
+      <p class="callout" style="margin-top:10px;" id="projects-callout-note">
+        <b>說明：</b>已內建5個場地的專案範例（維修區／304K區1號／304K區2號／1號台車／3號台車，取自型鋼需求試算表的實際尺寸），可直接勾選比較、載入編輯或刪除；按「詳情」可以看到該專案完整的型鋼需求、供需比對、可配組數，也可以在那裡新增組立照片、匯出Excel或列印該專案的型鋼需求與組立圖。
+        專案存檔只保留①②③的尺寸／規格／噸位換算基準設定與試算結果快照，不含庫存清單（庫存清單為共用資料，載入專案不會覆蓋現有庫存）。
+        存檔（含照片）僅保存在目前這台電腦的瀏覽器裡；若要跨電腦使用或分享給同事，請用「匯出專案檔」另存成一個檔案，對方再用「匯入專案檔」讀取——照片檔案較大時，匯出的檔案也會跟著變大。
+      </p>
+    </section>
+  </div>
+
+  <div id="view-gallery" class="main" hidden>
+    <div class="view-header">
+      <h2 class="section-title"><span class="idx">📷</span>歷史組立圖</h2>
+      <span id="storage-mode-badge-gallery"></span>
+    </div>
+    <p class="section-sub">各專案的組立示意圖與地點實際完成照片；點縮圖可放大檢視，也可以直接在這裡新增或刪除照片、列印單一專案</p>
+    <div id="gallery-list" data-print-section="sgallery" data-print-label="歷史組立圖（全部專案照片）"></div>
+  </div>
+
+  <footer id="app-footer" data-print-section="sfooter" data-print-label="說明文字（比對規則等）">
+    <p>比對規則：需求量＝BOM中同規格小計加總；同規格可用庫存＝規格完全相同且未標「不用」的庫存長度合計；
+    近似規格可代用＝「可代用規格歸屬」欄填寫該規格、且未標「不用」的庫存長度合計；不足數量＝MAX(0, 需求量－同規格庫存－代用庫存)；
+    需採購支數＝不足數量÷標準採購型鋼長，無條件進位。與「型鋼需求.xlsx」供需對照彙總表的計算方式一致。</p>
+    <p>「04 依目前庫存可配出幾組」：每規格以「現有可用庫存÷每組需求量」無條件捨去取整數，再取所有規格最小值，邏輯與「03 供需比對」共用同一批數字。
+    「05 噸位快算」：容量假設與地枕全長成正比（寬度、立柱支數不變），比例由使用者輸入的「已知總噸數÷已知全長合計」決定，是簡化的規劃參考，並非結構承重計算，正式評估仍須以實際材料與工程判斷為準。</p>
+    <p id="footer-storage-note">「歷史專案」：存檔會把當下①②③的輸入與試算結果快照（含地點與組立照片）存進這台電腦的瀏覽器（localStorage），重新整理頁面後仍會保留；清除瀏覽器資料或換電腦、換瀏覽器則會遺失，請用「匯出專案檔」定期備份或跨電腦分享。載入專案只會覆蓋①②③的設定，不會更動庫存清單。</p>
+  </footer>
+
+  <div class="modal-overlay" id="print-modal-overlay" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="print-modal-title">
+      <button type="button" class="modal-close-x" id="btn-print-close-x" aria-label="關閉">✕</button>
+      <h3 id="print-modal-title">選擇要列印的內容</h3>
+      <p class="modal-sub">取消勾選的區塊不會出現在列印結果中，畫面上仍會正常顯示。</p>
+      <div class="modal-body-scroll">
+        <ul class="modal-checklist" id="print-checklist"></ul>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="ghost" id="btn-print-cancel">取消</button>
+        <button type="button" class="primary" id="btn-print-confirm">開始列印</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="project-detail-overlay" hidden>
+    <div class="modal-card modal-card-wide" role="dialog" aria-modal="true" aria-labelledby="project-detail-title">
+      <button type="button" class="modal-close-x" id="btn-detail-close-x" aria-label="關閉">✕</button>
+      <h3 id="project-detail-title">專案詳情</h3>
+      <p class="modal-sub" id="project-detail-sub"></p>
+      <div class="modal-body-scroll" id="project-detail-body"></div>
+      <div class="modal-actions">
+        <button type="button" class="ghost" id="btn-detail-export-excel">匯出Excel（本專案）</button>
+        <button type="button" class="ghost" id="btn-detail-print">列印（型鋼需求＋組立圖）</button>
+        <span class="spacer"></span>
+        <button type="button" class="ghost" id="btn-detail-close">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="lightbox-overlay" id="lightbox-overlay" hidden>
+    <button type="button" class="modal-close-x" id="btn-lightbox-close" aria-label="關閉">✕</button>
+    <img id="lightbox-img" src="" alt="組立照片放大檢視">
+  </div>
+
+  <div id="project-print-root"></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---- sample inventory, extracted from the user's 型鋼需求.xlsx 庫存明細 ----
+  const SAMPLE_INVENTORY = [{"spec": "400 x 408", "length": 7, "qty": 2, "notUse": false, "subFor": "400 x 400", "note": "切5m用"}, {"spec": "400 x 408", "length": 10, "qty": 2, "notUse": false, "subFor": "400 x 400", "note": "切5m用"}, {"spec": "414 x 405", "length": 9, "qty": 1, "notUse": false, "subFor": "", "note": "切5M用"}, {"spec": "428 x 407", "length": 8.5, "qty": 1, "notUse": false, "subFor": "", "note": ""}, {"spec": "414 x 405", "length": 10, "qty": 1, "notUse": false, "subFor": "", "note": "切5m用"}, {"spec": "414 x 405", "length": 11, "qty": 1, "notUse": false, "subFor": "", "note": "切5m用"}, {"spec": "400 x 400", "length": 12, "qty": 1, "notUse": false, "subFor": "", "note": "304地枕長12m用"}, {"spec": "400 x 400", "length": 12, "qty": 1, "notUse": false, "subFor": "", "note": "304地枕長12m用"}, {"spec": "400 x 400", "length": 9, "qty": 1, "notUse": false, "subFor": "", "note": "切8m用"}, {"spec": "400 x 400", "length": 10, "qty": 2, "notUse": false, "subFor": "", "note": "切5m用"}, {"spec": "414 x 405", "length": 10, "qty": 1, "notUse": false, "subFor": "", "note": "切5m用"}, {"spec": "428 x 407", "length": 12, "qty": 2, "notUse": false, "subFor": "", "note": ""}, {"spec": "394 x 398", "length": 13, "qty": 1, "notUse": false, "subFor": "", "note": ""}, {"spec": "394 x 398", "length": 6, "qty": 1, "notUse": false, "subFor": "", "note": ""}, {"spec": "414 x 405", "length": 7.5, "qty": 3, "notUse": false, "subFor": "", "note": "切5m用"}, {"spec": "414 x 405", "length": 7.5, "qty": 1, "notUse": false, "subFor": "", "note": "切5m用"}, {"spec": "414 x 405", "length": 6, "qty": 1, "notUse": false, "subFor": "", "note": "切5m用"}, {"spec": "700 x 300", "length": 9, "qty": 3, "notUse": true, "subFor": "", "note": "切2m斜撐用"}, {"spec": "700 x 300", "length": 9, "qty": 1, "notUse": true, "subFor": "", "note": "切2m斜撐用"}, {"spec": "700 x 300", "length": 9, "qty": 3, "notUse": true, "subFor": "", "note": "切2m斜撐用"}, {"spec": "700 x 300", "length": 11, "qty": 3, "notUse": true, "subFor": "", "note": "切2m斜撐用"}, {"spec": "700 x 300", "length": 11, "qty": 3, "notUse": true, "subFor": "", "note": "切2m斜撐用"}, {"spec": "700 x 300", "length": 12, "qty": 1, "notUse": false, "subFor": "", "note": "切2m斜撐用"}, {"spec": "700 x 300", "length": 12, "qty": 1, "notUse": false, "subFor": "", "note": "切2m斜撐用"}, {"spec": "700 x 300", "length": 12, "qty": 1, "notUse": false, "subFor": "", "note": "切2m斜撐用"}, {"spec": "700 x 300", "length": 13, "qty": 3, "notUse": true, "subFor": "", "note": "切2m斜撐用"}, {"spec": "700 x 300", "length": 14, "qty": 1, "notUse": false, "subFor": "", "note": "切2m斜撐用"}, {"spec": "700 x 300", "length": 14, "qty": 2, "notUse": false, "subFor": "", "note": "切2m斜撐用"}, {"spec": "700 x 300", "length": 14, "qty": 2, "notUse": true, "subFor": "", "note": "切2m斜撐用"}, {"spec": "700 x 300", "length": 14, "qty": 1, "notUse": true, "subFor": "", "note": "切2m斜撐用"}, {"spec": "700 x 300", "length": 14, "qty": 1, "notUse": true, "subFor": "", "note": "切2m斜撐用"}, {"spec": "700 x 300", "length": 15, "qty": 1, "notUse": true, "subFor": "", "note": "切2m斜撐用"}, {"spec": "700 x 300", "length": 17, "qty": 1, "notUse": true, "subFor": "", "note": "切2m斜撐用"}, {"spec": "700 x 300", "length": 18, "qty": 3, "notUse": true, "subFor": "", "note": "切2m斜撐用"}, {"spec": "700 x 300", "length": 18, "qty": 1, "notUse": true, "subFor": "", "note": "切2m斜撐用"}, {"spec": "700 x 300", "length": 16, "qty": 2, "notUse": true, "subFor": "", "note": "切2m斜撐用"}, {"spec": "364 x 371", "length": 10, "qty": 1, "notUse": false, "subFor": "", "note": "規格碼 14x109；切8m/12m用"}, {"spec": "364 x 371", "length": 12, "qty": 3, "notUse": false, "subFor": "", "note": "規格碼 14x109；切8m/12m用"}, {"spec": "364 x 371", "length": 15, "qty": 1, "notUse": false, "subFor": "", "note": "規格碼 14x109；切8m/12m用"}, {"spec": "364 x 371", "length": 9, "qty": 2, "notUse": false, "subFor": "", "note": "規格碼 14x109；切8m/12m用"}, {"spec": "364 x 371", "length": 9, "qty": 1, "notUse": false, "subFor": "", "note": "規格碼 14x109；切8m/12m用"}, {"spec": "400 x 400", "length": 9, "qty": 2, "notUse": false, "subFor": "", "note": "切8m用｜廢棄品"}, {"spec": "400 x 400", "length": 6, "qty": 2, "notUse": false, "subFor": "", "note": "切5m用｜廢棄品"}, {"spec": "414 x 405", "length": 12, "qty": 1, "notUse": false, "subFor": "", "note": "切5m用｜廢棄品"}, {"spec": "414 x 405", "length": 9, "qty": 4, "notUse": false, "subFor": "", "note": "切5M用｜廢棄品"}];
+
+  const DEMO_PRESET = {
+    railLen:16, tieLen:8, colCount:8, colLen:5, braceLen:2, hasReinforce:true, hasBrace:true, purchaseLen:12,
+    specs:{ col:"400 x 400", rail:"428 x 407, 394 x 398", tie:"400 x 400", reinforce:"364 x 371", brace:"700 x 300" }
+  };
+
+  let inventory = []; // {spec, length, qty, notUse, subFor, note}
+  let seq = 0;
+  function withId(row){ return Object.assign({ _id: "r" + (seq++) }, row); }
+
+  // ---------------------------------------------------------------- geometry
+  const LEN_PX = 24, WID_PX = 24;
+  const ANGLE = 25 * Math.PI / 180;
+  const COS_A = Math.cos(ANGLE), SIN_A = Math.sin(ANGLE);
+  const COL_STUB = 66;
+  const BRACE_LEG_M = 1, BRACE_UP_FRAC = 0.55;
+  const THICK = { rail:7, tie:6, reinforce:5, post:7 };
+  const DIM_OFFSET_M = 1.7;
+
+  function svgEl(tag, attrs){
+    const e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+  function beam(svg, p1, p2, thickness, cls){
+    const dx = p2.x - p1.x, dy = p2.y - p1.y;
+    const len = Math.sqrt(dx*dx + dy*dy) || 1;
+    const nx = -dy/len*thickness/2, ny = dx/len*thickness/2;
+    const a={x:p1.x+nx,y:p1.y+ny}, b={x:p2.x+nx,y:p2.y+ny}, c={x:p2.x-nx,y:p2.y-ny}, d={x:p1.x-nx,y:p1.y-ny};
+    const pts=[a,b,c,d].map(p=>p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ");
+    svg.appendChild(svgEl("polygon",{points:pts,class:"beam "+cls}));
+    svg.appendChild(svgEl("line",{x1:a.x.toFixed(1),y1:a.y.toFixed(1),x2:b.x.toFixed(1),y2:b.y.toFixed(1),class:"beam-highlight"}));
+  }
+  function braceTriangle(svg, pt, x, y, isBack){
+    const pBase=pt(x,y,0), pUp=pt(x,y,COL_STUB*BRACE_UP_FRAC);
+    const pOut = isBack ? pt(x+BRACE_LEG_M,y,0) : pt(x,y-BRACE_LEG_M,0);
+    const points=[pBase,pUp,pOut].map(p=>p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ");
+    svg.appendChild(svgEl("polygon",{points:points,class:"brace-tri"+(isBack?" is-back":"")}));
+  }
+  function labelWithBg(svg,x,y,text,cls,anchor){
+    const w=Math.max(28,text.length*6.6+10), h=16;
+    const boxX = anchor==="start" ? x : x-w/2;
+    const textX = anchor==="start" ? x+6 : x;
+    svg.appendChild(svgEl("rect",{x:boxX.toFixed(1),y:(y-h/2).toFixed(1),width:w.toFixed(1),height:h.toFixed(1),rx:"3",class:"dim-bg"}));
+    const t=svgEl("text",{x:textX.toFixed(1),y:(y+3.8).toFixed(1),"text-anchor":anchor==="start"?"start":"middle",class:cls||"dim-text"});
+    t.textContent=text; svg.appendChild(t);
+  }
+  function dimLine(svg,p1,p2,label,tickPx){
+    const dx=p2.x-p1.x, dy=p2.y-p1.y, len=Math.sqrt(dx*dx+dy*dy)||1;
+    const nx=-dy/len, ny=dx/len, tl=tickPx||5;
+    function tick(p){ svg.appendChild(svgEl("line",{x1:(p.x-nx*tl).toFixed(1),y1:(p.y-ny*tl).toFixed(1),x2:(p.x+nx*tl).toFixed(1),y2:(p.y+ny*tl).toFixed(1),class:"dim-tick"})); }
+    svg.appendChild(svgEl("line",{x1:p1.x.toFixed(1),y1:p1.y.toFixed(1),x2:p2.x.toFixed(1),y2:p2.y.toFixed(1),class:"dim-line"}));
+    tick(p1); tick(p2);
+    labelWithBg(svg,(p1.x+p2.x)/2,(p1.y+p2.y)/2,label);
+  }
+
+  function renderStage(dims, hostOverride){
+    const numPositions = Math.max(1, Math.round(dims.colCount/2));
+    const positions=[]; const step = numPositions>1 ? dims.railLen/(numPositions-1) : 0;
+    for (let i=0;i<numPositions;i++) positions.push(numPositions>1 ? step*i : dims.railLen/2);
+
+    const maxRun = dims.railLen*LEN_PX*COS_A + dims.tieLen*WID_PX;
+    const maxRise = dims.railLen*LEN_PX*SIN_A + COL_STUB;
+    const marginL = 30 + DIM_OFFSET_M*WID_PX + 55;
+    const marginR = 30, marginT = 46;
+    const marginB = 30 + DIM_OFFSET_M*LEN_PX*SIN_A + 30;
+    const svgW = maxRun+marginL+marginR, svgH = maxRise+marginT+marginB;
+    const origin = { x:marginL, y:svgH-marginB };
+    function pt(x,y,zpx){ return { x: origin.x + x*LEN_PX*COS_A + y*WID_PX, y: origin.y - x*LEN_PX*SIN_A - (zpx||0) }; }
+
+    const host = hostOverride || document.getElementById("stage-host");
+    host.innerHTML = "";
+    const svg = svgEl("svg",{viewBox:"0 0 "+svgW.toFixed(0)+" "+svgH.toFixed(0),width:svgW.toFixed(0),height:svgH.toFixed(0),class:"iso"});
+    const rig = svgEl("g",{class:"rig"}); svg.appendChild(rig); host.appendChild(svg);
+
+    // Build up in construction order — both side rails first, then each tie
+    // beam, each reinforce tie, then each post/brace position — one <g
+    // class="step-group"> per stage so CSS can stagger them in as a simple
+    // "erection sequence" animation (see .step-group / @keyframes assemblyIn).
+    let buildStep = 0;
+    function stepGroup(){ return svgEl("g", { class:"step-group", style:"--step:"+buildStep+";" }); }
+
+    const gRails = stepGroup();
+    beam(gRails, pt(0,0,0), pt(dims.railLen,0,0), THICK.rail, "beam-rail");
+    beam(gRails, pt(0,dims.tieLen,0), pt(dims.railLen,dims.tieLen,0), THICK.rail, "beam-rail");
+    rig.appendChild(gRails); buildStep++;
+
+    positions.forEach(x => {
+      const g = stepGroup();
+      beam(g, pt(x,0,0), pt(x,dims.tieLen,0), THICK.tie, "beam-tie");
+      rig.appendChild(g); buildStep++;
+    });
+    if (dims.hasReinforce){
+      for (let i=0;i<positions.length-1;i++){
+        const rx=(positions[i]+positions[i+1])/2;
+        const g = stepGroup();
+        beam(g, pt(rx,0,0), pt(rx,dims.tieLen,0), THICK.reinforce, "beam-reinforce");
+        rig.appendChild(g); buildStep++;
+      }
+    }
+    positions.forEach(x => {
+      const g = stepGroup();
+      [0, dims.tieLen].forEach((y, yi) => {
+        const isBack = yi===1;
+        const base = pt(x,y,0), top = pt(x,y,COL_STUB);
+        beam(g, base, top, THICK.post, "beam-post");
+        if (dims.hasBrace) braceTriangle(g, pt, x, y, isBack);
+        g.appendChild(svgEl("circle",{cx:base.x.toFixed(1),cy:base.y.toFixed(1),r:"3.4",class:"joint"}));
+      });
+      rig.appendChild(g); buildStep++;
+    });
+    dimLine(svg, pt(0,-DIM_OFFSET_M,0), pt(dims.railLen,-DIM_OFFSET_M,0), "全長 "+dims.railLen+"m");
+    dimLine(svg, pt(-DIM_OFFSET_M,0,0), pt(-DIM_OFFSET_M,dims.tieLen,0), "寬 "+dims.tieLen+"m");
+    labelWithBg(svg, 6, 16, "立柱 "+dims.colLen+"m", "dim-text-soft", "start");
+    if (dims.hasBrace) labelWithBg(svg, 6, 34, "斜撐 "+dims.braceLen+"m（上1＋下1）", "dim-text-soft", "start");
+  }
+
+  // ------------------------------------------------------------ BOM + match
+  function readDims(){
+    return {
+      railLen: parseFloat(document.getElementById("in-railLen").value) || 0,
+      tieLen: parseFloat(document.getElementById("in-tieLen").value) || 0,
+      colCount: Math.max(2, Math.round((parseFloat(document.getElementById("in-colCount").value)||2)/2)*2),
+      colLen: parseFloat(document.getElementById("in-colLen").value) || 0,
+      braceLen: parseFloat(document.getElementById("in-braceLen").value) || 0,
+      hasReinforce: document.getElementById("in-hasReinforce").checked,
+      hasBrace: document.getElementById("in-hasBrace").checked,
+      purchaseLen: parseFloat(document.getElementById("in-purchaseLen").value) || 12,
+      specs: {
+        col: document.getElementById("spec-col").value.trim(),
+        rail: document.getElementById("spec-rail").value.trim(),
+        tie: document.getElementById("spec-tie").value.trim(),
+        reinforce: document.getElementById("spec-reinforce").value.trim(),
+        brace: document.getElementById("spec-brace").value.trim()
+      }
+    };
+  }
+
+  function computeBOM(dims){
+    const numPositions = Math.max(1, Math.round(dims.colCount/2));
+    const rows = [
+      { key:"col", label:"立柱", spec:dims.specs.col, unitLen:dims.colLen, qty:dims.colCount },
+      { key:"rail", label:"兩側地枕", spec:dims.specs.rail, unitLen:dims.railLen, qty:2 },
+      { key:"tie", label:"立柱地枕", spec:dims.specs.tie, unitLen:dims.tieLen, qty:numPositions }
+    ];
+    if (dims.hasReinforce && numPositions > 1){
+      rows.push({ key:"reinforce", label:"中間補強地枕", spec:dims.specs.reinforce, unitLen:dims.tieLen, qty:numPositions-1 });
+    }
+    if (dims.hasBrace){
+      rows.push({ key:"brace", label:"斜撐", spec:dims.specs.brace, unitLen:dims.braceLen, qty:dims.colCount });
+    }
+    rows.forEach(r => { r.subtotal = +(r.unitLen * r.qty).toFixed(2); });
+    return rows;
+  }
+
+  function normSpec(s){ return (s||"").trim().toLowerCase().replace(/\s+/g," "); }
+  function splitAlts(specText){ return (specText||"").split(",").map(normSpec).filter(Boolean); }
+
+  function computeMatch(bomRows, inv, purchaseLen){
+    // group BOM subtotal by the raw spec text (demand per declared spec group)
+    const groups = [];
+    const bySpec = new Map();
+    bomRows.forEach(r => {
+      const key = r.spec || "__unspec__";
+      if (!bySpec.has(key)) { bySpec.set(key, { spec:r.spec, demand:0, members:[], unspecified: !r.spec }); groups.push(bySpec.get(key)); }
+      const g = bySpec.get(key);
+      g.demand += r.subtotal; g.members.push(r.label);
+    });
+    return groups.map(g => {
+      if (g.unspecified){
+        // no spec declared for this component — can't look up stock, so the
+        // whole demand counts as a gap rather than silently disappearing.
+        return {
+          spec: "", members: g.members, demand: g.demand,
+          sameStock: 0, subStock: 0, shortfall: g.demand,
+          purchaseCount: g.demand > 0 ? Math.ceil(g.demand / (purchaseLen || 12)) : 0,
+          status: "bad", unspecified: true
+        };
+      }
+      const alts = splitAlts(g.spec);
+      let sameStock = 0, subStock = 0;
+      inv.forEach(row => {
+        const rowSpec = normSpec(row.spec);
+        const total = (parseFloat(row.length)||0) * (parseFloat(row.qty)||0);
+        if (row.notUse) return;
+        if (alts.includes(rowSpec)) sameStock += total;
+        const subFor = normSpec(row.subFor);
+        if (subFor && alts.includes(subFor)) subStock += total;
+      });
+      const shortfall = Math.max(0, g.demand - sameStock - subStock);
+      const purchaseCount = shortfall <= 0 ? 0 : Math.ceil(shortfall / (purchaseLen || 12));
+      let status = "good";
+      if (shortfall > 0) status = purchaseCount >= 2 ? "bad" : "warn";
+      return {
+        spec: g.spec, members: g.members, demand: g.demand,
+        sameStock, subStock, shortfall, purchaseCount, status
+      };
+    });
+  }
+
+  // ------------------------------------------------------- group capacity
+  // "能做出的組數" — given current inventory, how many complete copies of the
+  // currently-configured "one group" (section ①②) can be assembled. Reuses
+  // the same per-spec available-stock figures as computeMatch(), so it stays
+  // consistent with the supply/demand table above it: independent per-spec
+  // floor division, then the minimum across specs is the bottleneck.
+  function computeGroupCapacity(matchRows){
+    let maxSets = null, bottleneck = null, hasUnspecified = false;
+    const rows = matchRows.map(m => {
+      if (m.unspecified){
+        hasUnspecified = true;
+        return Object.assign({}, m, { setsAvailable: null });
+      }
+      const avail = m.sameStock + m.subStock;
+      const setsAvailable = m.demand > 0 ? Math.floor(avail / m.demand + 1e-9) : null;
+      if (setsAvailable !== null && (maxSets === null || setsAvailable < maxSets)){
+        maxSets = setsAvailable; bottleneck = m.spec;
+      }
+      return Object.assign({}, m, { setsAvailable });
+    });
+    if (maxSets === null) maxSets = 0;
+    return { rows, maxSets, bottleneck, hasUnspecified };
+  }
+
+  // ------------------------------------------------------------- tonnage
+  // 噸位快算：容量假設與地枕「全長」成正比（寬度／立柱支數不變），比例由
+  // 左側③「已知總噸數 ÷ 已知全長合計」決定。這是使用者自訂的簡化假設，
+  // 不是結構工程計算，僅供初步規劃參考。
+  function computeTonnage(dims){
+    const knownTons = parseFloat(document.getElementById("in-knownTons").value) || 0;
+    const knownLen = parseFloat(document.getElementById("in-knownLen").value) || 0;
+    const ratio = knownLen > 0 ? knownTons / knownLen : 0; // 公噸／公尺
+    const targetTons = parseFloat(document.getElementById("in-targetTons").value) || 0;
+    const currentRailLen = dims.railLen;
+    const capacityPerCurrentSet = ratio * currentRailLen;
+    let setsNeeded = null;
+    if (targetTons > 0 && capacityPerCurrentSet > 0) setsNeeded = Math.ceil(targetTons / capacityPerCurrentSet);
+    let singleSetLen = null;
+    if (targetTons > 0 && ratio > 0) singleSetLen = targetTons / ratio;
+    return { ratio, targetTons, currentRailLen, capacityPerCurrentSet, setsNeeded, singleSetLen };
+  }
+
+  // ------------------------------------------------------------------ paint
+  function fmt(n){ return (Math.round(n*100)/100).toLocaleString("en-US"); }
+
+  function paintBOM(rows){
+    const tbody = document.querySelector("#bom-table tbody");
+    tbody.innerHTML = "";
+    let total = 0;
+    rows.forEach(r => {
+      total += r.subtotal;
+      const tr = document.createElement("tr");
+      tr.innerHTML = "<td>"+r.label+"</td><td class='spec-mono'>"+(r.spec||"—")+"</td>"+
+        "<td class='num'>"+fmt(r.unitLen)+"m</td><td class='num'>"+r.qty+"</td><td class='num'>"+fmt(r.subtotal)+"</td>";
+      tbody.appendChild(tr);
+    });
+    const totalTr = document.createElement("tr"); totalTr.className = "total";
+    totalTr.innerHTML = "<td colspan='4'>合計</td><td class='num'>"+fmt(total)+" m</td>";
+    tbody.appendChild(totalTr);
+  }
+
+  // shared demand/shortfall/purchase totals + overall status, reused by the
+  // 03 KPI cards and by the project-save snapshot below.
+  function matchTotals(matchRows){
+    let totalDemand=0, totalShort=0, totalPurchase=0, worst="good";
+    matchRows.forEach(m => {
+      totalDemand += m.demand; totalShort += m.shortfall; totalPurchase += m.purchaseCount;
+      if (m.status==="bad") worst="bad"; else if (m.status==="warn" && worst!=="bad") worst="warn";
+    });
+    return { totalDemand, totalShort, totalPurchase, worst };
+  }
+
+  function paintMatch(matchRows){
+    const tbody = document.querySelector("#match-table tbody");
+    tbody.innerHTML = "";
+    const statusLabel = { good:"庫存充足", warn:"缺口較小", bad:"缺口較大" };
+    const { totalDemand, totalShort, totalPurchase, worst } = matchTotals(matchRows);
+    matchRows.forEach(m => {
+      const tr = document.createElement("tr");
+      const specCell = m.unspecified
+        ? "<td class='spec-mono' style='color:var(--ink-soft);font-style:italic;'>尚未指定（"+m.members.join("、")+"）</td>"
+        : "<td class='spec-mono'>"+m.spec+"</td>";
+      const label = m.unspecified ? "尚未指定規格" : statusLabel[m.status];
+      tr.innerHTML = specCell+
+        "<td class='num'>"+fmt(m.demand)+"</td>"+
+        "<td class='num'>"+fmt(m.sameStock)+"</td>"+
+        "<td class='num'>"+fmt(m.subStock)+"</td>"+
+        "<td class='num'>"+fmt(m.shortfall)+"</td>"+
+        "<td class='num'>"+(m.purchaseCount||0)+"</td>"+
+        "<td><span class='pill "+m.status+"'>"+label+"</span></td>";
+      tbody.appendChild(tr);
+    });
+
+    const kpiHost = document.getElementById("kpi-host");
+    kpiHost.innerHTML = "";
+    const kpis = [
+      { v: fmt(totalDemand)+" m", l:"需求總長", cls:"" },
+      { v: fmt(totalShort)+" m", l:"總缺口長度", cls: totalShort>0 ? "bad" : "good" },
+      { v: totalPurchase+" 支", l:"建議採購支數", cls: totalPurchase>0 ? "bad" : "good" },
+      { v: statusLabel[worst], l:"整體庫存狀態", cls: worst==="good"?"good":(worst==="bad"?"bad":"") }
+    ];
+    kpis.forEach(k => {
+      const div = document.createElement("div"); div.className = "kpi";
+      div.innerHTML = "<div class='v "+k.cls+"'>"+k.v+"</div><div class='l'>"+k.l+"</div>";
+      kpiHost.appendChild(div);
+    });
+  }
+
+  function paintGroupCapacity(gc){
+    const statHost = document.getElementById("groupcap-stat");
+    const cls = gc.maxSets > 0 ? "good" : "bad";
+    const bnText = gc.bottleneck ? "（瓶頸規格：<span class='spec-mono'>"+gc.bottleneck+"</span>）" : "";
+    statHost.innerHTML = "<div class='v "+cls+"'>"+gc.maxSets+" 組</div>"+
+      "<div class='l'>以目前①②設定的一組用量估算，現有庫存最多可完整配出"+bnText+"</div>";
+
+    const tbody = document.querySelector("#groupcap-table tbody");
+    tbody.innerHTML = "";
+    gc.rows.forEach(m => {
+      const tr = document.createElement("tr");
+      const isBottleneck = !m.unspecified && m.setsAvailable === gc.maxSets;
+      if (isBottleneck) tr.className = "bottleneck-row";
+      const specCell = m.unspecified
+        ? "<td class='spec-mono' style='color:var(--ink-soft);font-style:italic;'>尚未指定（"+m.members.join("、")+"）</td>"
+        : "<td class='spec-mono'>"+m.spec+"</td>";
+      tr.innerHTML = specCell+
+        "<td class='num'>"+fmt(m.demand)+"</td>"+
+        "<td class='num'>"+fmt(m.sameStock+m.subStock)+"</td>"+
+        "<td class='num'>"+(m.setsAvailable===null ? "—" : m.setsAvailable)+"</td>"+
+        "<td>"+(isBottleneck ? "<span class='pill bad'>瓶頸</span>" : "")+"</td>";
+      tbody.appendChild(tr);
+    });
+
+    const note = document.getElementById("groupcap-note");
+    note.innerHTML = "<b>估算方式：</b>每個規格「現有可用庫存（同規格＋代用）」÷「每組需求量」無條件捨去取整數，再取所有規格中的最小值——邏輯與上方「03 供需比對」使用同一批數字，只是換算成「組」而非「缺口」。"+
+      (gc.hasUnspecified ? "　<b>注意：</b>有構件尚未在②指定規格，無法核對其庫存，這個估算可能偏樂觀，建議先補上規格再參考。" : "");
+  }
+
+  function paintTonnage(t){
+    const ratioNote = document.getElementById("tonnage-ratio-note");
+    ratioNote.textContent = t.ratio > 0 ? ("≈ 每公尺全長可放 "+fmt(t.ratio)+" 公噸") : "請填寫已知總噸數與全長合計";
+
+    const kpiHost = document.getElementById("tonnage-kpi-host");
+    kpiHost.innerHTML = "";
+    const note = document.getElementById("tonnage-note");
+    if (t.targetTons <= 0){
+      note.innerHTML = "在上方輸入「目標鋼筋噸數」後，會自動算出建議組數與所需尺寸。";
+      return;
+    }
+    const kpis = [
+      { v: fmt(t.capacityPerCurrentSet)+" 噸", l:"以目前①全長（"+fmt(t.currentRailLen)+"m）估算，一組可放" },
+      { v: (t.setsNeeded||"—")+" 組", l:"要放下 "+fmt(t.targetTons)+" 公噸，需要幾組（沿用①目前尺寸）" },
+      { v: fmt(t.singleSetLen)+" m", l:"若只做1組扛下全部噸數，全長需要多長" }
+    ];
+    kpis.forEach(k => {
+      const div = document.createElement("div"); div.className = "kpi";
+      div.innerHTML = "<div class='v'>"+k.v+"</div><div class='l'>"+k.l+"</div>";
+      kpiHost.appendChild(div);
+    });
+    note.innerHTML = "<b>假設：</b>容量與地枕「全長」成正比、寬度與立柱支數不變，比例＝左側③「已知總噸數 ÷ 已知全長合計」。這是簡化估算，僅供初步規劃參考，正式評估請以實際承重數據與工程判斷為準。";
+  }
+
+  function paintInventory(){
+    const tbody = document.querySelector("#inv-table tbody");
+    tbody.innerHTML = "";
+    inventory.forEach(row => {
+      const tr = document.createElement("tr");
+      tr.dataset.id = row._id;
+
+      const specTd = document.createElement("td"); specTd.className="spec-cell";
+      const specInput = document.createElement("input"); specInput.type="text"; specInput.value=row.spec;
+      specInput.addEventListener("input", e => { row.spec = e.target.value; recompute(); });
+      specTd.appendChild(specInput); tr.appendChild(specTd);
+
+      const lenTd = document.createElement("td"); lenTd.className="num num-cell";
+      const lenInput = document.createElement("input"); lenInput.type="number"; lenInput.step="0.5"; lenInput.value=row.length;
+      lenInput.addEventListener("input", e => { row.length = parseFloat(e.target.value)||0; paintTotalCell(tr,row); recompute(); });
+      lenTd.appendChild(lenInput); tr.appendChild(lenTd);
+
+      const qtyTd = document.createElement("td"); qtyTd.className="num num-cell";
+      const qtyInput = document.createElement("input"); qtyInput.type="number"; qtyInput.step="1"; qtyInput.min="0"; qtyInput.value=row.qty;
+      qtyInput.addEventListener("input", e => { row.qty = parseFloat(e.target.value)||0; paintTotalCell(tr,row); recompute(); });
+      qtyTd.appendChild(qtyInput); tr.appendChild(qtyTd);
+
+      const totalTd = document.createElement("td"); totalTd.className="num total-cell";
+      totalTd.textContent = fmt((row.length||0)*(row.qty||0));
+      tr.appendChild(totalTd);
+
+      const notUseTd = document.createElement("td"); notUseTd.style.textAlign="center";
+      const notUseInput = document.createElement("input"); notUseInput.type="checkbox"; notUseInput.className="inv-check"; notUseInput.checked = !!row.notUse;
+      notUseInput.addEventListener("change", e => { row.notUse = e.target.checked; recompute(); });
+      notUseTd.appendChild(notUseInput); tr.appendChild(notUseTd);
+
+      const subForTd = document.createElement("td"); subForTd.className="spec-cell";
+      const subForInput = document.createElement("input"); subForInput.type="text"; subForInput.value=row.subFor||""; subForInput.placeholder="（可代用的規格）";
+      subForInput.addEventListener("input", e => { row.subFor = e.target.value; recompute(); });
+      subForTd.appendChild(subForInput); tr.appendChild(subForTd);
+
+      const noteTd = document.createElement("td"); noteTd.className="note-cell";
+      const noteInput = document.createElement("input"); noteInput.type="text"; noteInput.value=row.note||"";
+      noteInput.addEventListener("input", e => { row.note = e.target.value; });
+      noteTd.appendChild(noteInput); tr.appendChild(noteTd);
+
+      const delTd = document.createElement("td");
+      const delBtn = document.createElement("button"); delBtn.type="button"; delBtn.className="small danger"; delBtn.textContent="刪除";
+      delBtn.addEventListener("click", () => { inventory = inventory.filter(r => r._id !== row._id); paintInventory(); recompute(); });
+      delTd.appendChild(delBtn); tr.appendChild(delTd);
+
+      tbody.appendChild(tr);
+    });
+    document.getElementById("inv-count").textContent = inventory.length + " 列";
+  }
+  function paintTotalCell(tr, row){
+    tr.querySelector(".total-cell").textContent = fmt((row.length||0)*(row.qty||0));
+  }
+
+  function recompute(){
+    const dims = readDims();
+    renderStage(dims);
+    const bom = computeBOM(dims);
+    paintBOM(bom);
+    const match = computeMatch(bom, inventory, dims.purchaseLen);
+    paintMatch(match);
+    const gc = computeGroupCapacity(match);
+    paintGroupCapacity(gc);
+    const tonnage = computeTonnage(dims);
+    paintTonnage(tonnage);
+  }
+
+  // -------------------------------------------------------------- controls
+  document.querySelectorAll('.side input, #in-hasReinforce').forEach(el => {
+    el.addEventListener("input", recompute);
+    el.addEventListener("change", recompute);
+  });
+  document.getElementById("in-targetTons").addEventListener("input", recompute);
+  document.getElementById("btn-replay-stage").addEventListener("click", () => { renderStage(readDims()); });
+
+  document.getElementById("btn-demo").addEventListener("click", () => {
+    document.getElementById("in-railLen").value = DEMO_PRESET.railLen;
+    document.getElementById("in-tieLen").value = DEMO_PRESET.tieLen;
+    document.getElementById("in-colCount").value = DEMO_PRESET.colCount;
+    document.getElementById("in-colLen").value = DEMO_PRESET.colLen;
+    document.getElementById("in-braceLen").value = DEMO_PRESET.braceLen;
+    document.getElementById("in-hasReinforce").checked = DEMO_PRESET.hasReinforce;
+    document.getElementById("in-hasBrace").checked = DEMO_PRESET.hasBrace !== false;
+    document.getElementById("in-purchaseLen").value = DEMO_PRESET.purchaseLen;
+    document.getElementById("spec-col").value = DEMO_PRESET.specs.col;
+    document.getElementById("spec-rail").value = DEMO_PRESET.specs.rail;
+    document.getElementById("spec-tie").value = DEMO_PRESET.specs.tie;
+    document.getElementById("spec-reinforce").value = DEMO_PRESET.specs.reinforce;
+    document.getElementById("spec-brace").value = DEMO_PRESET.specs.brace;
+    if (inventory.length === 0) loadSampleInventory();
+    recompute();
+  });
+  document.getElementById("btn-reset").addEventListener("click", () => {
+    document.getElementById("in-railLen").value = 16;
+    document.getElementById("in-tieLen").value = 8;
+    document.getElementById("in-colCount").value = 8;
+    document.getElementById("in-colLen").value = 5;
+    document.getElementById("in-braceLen").value = 2;
+    document.getElementById("in-hasReinforce").checked = true;
+    document.getElementById("in-hasBrace").checked = true;
+    document.getElementById("in-purchaseLen").value = 12;
+    document.getElementById("spec-col").value = "400 x 400";
+    document.getElementById("spec-rail").value = "428 x 407, 394 x 398";
+    document.getElementById("spec-tie").value = "400 x 400";
+    document.getElementById("spec-reinforce").value = "364 x 371";
+    document.getElementById("spec-brace").value = "700 x 300";
+    recompute();
+  });
+
+  function loadSampleInventory(){
+    inventory = SAMPLE_INVENTORY.map(withId);
+    paintInventory();
+  }
+  document.getElementById("btn-load-sample").addEventListener("click", () => { loadSampleInventory(); recompute(); });
+  document.getElementById("btn-add-row").addEventListener("click", () => {
+    inventory.push(withId({ spec:"", length:0, qty:0, notUse:false, subFor:"", note:"" }));
+    paintInventory(); recompute();
+  });
+  document.getElementById("btn-clear-inv").addEventListener("click", () => {
+    inventory = []; paintInventory(); recompute();
+  });
+
+  // ---------------------------------------------------------------------
+  // projects: save the current ①②③ setup + a snapshot of its results as a
+  // named "project" (e.g. one of the 5 real 檔樁 groups), so it can be
+  // reloaded later or compared side-by-side against other saved projects.
+  // Persisted to this browser's localStorage; export/import to a .json file
+  // covers moving projects to another computer or sharing with a colleague,
+  // the same way Excel export already covers sharing a result snapshot.
+  const STATUS_LABEL = { good:"庫存充足", warn:"缺口較小", bad:"缺口較大" };
+  const PROJECTS_KEY = "steelCalcProjects_v1";
+  let projects = [];
+  const compareChecked = new Set();
+
+  function loadProjectsFromStorage(){
+    try {
+      const raw = localStorage.getItem(PROJECTS_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      projects = Array.isArray(parsed) ? parsed : [];
+    } catch(e){ projects = []; } // private browsing / storage disabled — start empty, saving will just no-op
+  }
+  function saveProjectsToStorage(){
+    try { localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects)); return true; }
+    catch(e){ return false; } // quota exceeded or storage disabled — keep working in-memory for this session
+  }
+
+  function collectProjectInputs(){
+    return {
+      railLen: document.getElementById("in-railLen").value,
+      tieLen: document.getElementById("in-tieLen").value,
+      colCount: document.getElementById("in-colCount").value,
+      colLen: document.getElementById("in-colLen").value,
+      braceLen: document.getElementById("in-braceLen").value,
+      hasReinforce: document.getElementById("in-hasReinforce").checked,
+      hasBrace: document.getElementById("in-hasBrace").checked,
+      purchaseLen: document.getElementById("in-purchaseLen").value,
+      specCol: document.getElementById("spec-col").value,
+      specRail: document.getElementById("spec-rail").value,
+      specTie: document.getElementById("spec-tie").value,
+      specReinforce: document.getElementById("spec-reinforce").value,
+      specBrace: document.getElementById("spec-brace").value,
+      knownTons: document.getElementById("in-knownTons").value,
+      knownLen: document.getElementById("in-knownLen").value
+    };
+  }
+
+  function applyProjectInputs(inputs){
+    if (!inputs) return;
+    document.getElementById("in-railLen").value = inputs.railLen;
+    document.getElementById("in-tieLen").value = inputs.tieLen;
+    document.getElementById("in-colCount").value = inputs.colCount;
+    document.getElementById("in-colLen").value = inputs.colLen;
+    document.getElementById("in-braceLen").value = inputs.braceLen;
+    document.getElementById("in-hasReinforce").checked = !!inputs.hasReinforce;
+    document.getElementById("in-hasBrace").checked = inputs.hasBrace !== undefined ? !!inputs.hasBrace : true; // older saved projects predate this switch — treat as "on" to match their original diagram/BOM
+    document.getElementById("in-purchaseLen").value = inputs.purchaseLen;
+    document.getElementById("spec-col").value = inputs.specCol || "";
+    document.getElementById("spec-rail").value = inputs.specRail || "";
+    document.getElementById("spec-tie").value = inputs.specTie || "";
+    document.getElementById("spec-reinforce").value = inputs.specReinforce || "";
+    document.getElementById("spec-brace").value = inputs.specBrace || "";
+    if (inputs.knownTons !== undefined && inputs.knownTons !== "") document.getElementById("in-knownTons").value = inputs.knownTons;
+    if (inputs.knownLen !== undefined && inputs.knownLen !== "") document.getElementById("in-knownLen").value = inputs.knownLen;
+    recompute();
+  }
+
+  function projectSummary(dims, bom, match, gc){
+    let bomTotal = 0; bom.forEach(r => { bomTotal += r.subtotal; });
+    const mt = matchTotals(match);
+    return {
+      railLen: dims.railLen, tieLen: dims.tieLen, colCount: dims.colCount, colLen: dims.colLen,
+      braceLen: dims.braceLen, hasReinforce: dims.hasReinforce, hasBrace: dims.hasBrace,
+      bomTotal: +bomTotal.toFixed(2),
+      totalDemand: +mt.totalDemand.toFixed(2), totalShort: +mt.totalShort.toFixed(2),
+      totalPurchase: mt.totalPurchase, status: mt.worst,
+      maxSets: gc.maxSets,
+      // full itemized snapshot, kept so the "詳情" project-detail view can show
+      // the exact same tables as the live 02/03/04 sections without recomputing
+      bom: bom, match: match, groupcap: gc
+    };
+  }
+
+  // ---- starter projects: the 5 real 檔樁 groups (維修區／304K區1號／304K區2號／
+  // 1號台車／3號台車), taken from the 型鋼需求試算 BOM table already worked out
+  // for this project (立柱5m＋斜撐2m are shared across all 5; only rail length,
+  // width/立柱地枕長, 立柱支數 and 是否含中間補強地枕 differ). Seeded once into a
+  // fresh browser's saved-project list so the 5 groups are there to compare
+  // without re-typing them; a one-time flag (not "projects.length===0") means
+  // deleting them later doesn't bring them back on the next reload.
+  const PROJECTS_SEEDED_KEY = "steelCalcProjectsSeeded_v1";
+  const DEFAULT_PROJECTS_SEED = [
+    { name:"維修區", location:"維修區", inputs:{ railLen:"16", tieLen:"8", colCount:"8", colLen:"5", braceLen:"2", hasReinforce:true, hasBrace:true, purchaseLen:"12",
+        specCol:"400 x 400", specRail:"428 x 407, 394 x 398", specTie:"400 x 400", specReinforce:"364 x 371", specBrace:"700 x 300",
+        knownTons:"10000", knownLen:"76" } },
+    { name:"304K區1號", location:"304K區", inputs:{ railLen:"14", tieLen:"12", colCount:"10", colLen:"5", braceLen:"2", hasReinforce:true, hasBrace:true, purchaseLen:"12",
+        specCol:"400 x 400", specRail:"428 x 407, 394 x 398", specTie:"400 x 400", specReinforce:"364 x 371", specBrace:"700 x 300",
+        knownTons:"10000", knownLen:"76" } },
+    { name:"304K區2號", location:"304K區", inputs:{ railLen:"14", tieLen:"12", colCount:"8", colLen:"5", braceLen:"2", hasReinforce:true, hasBrace:true, purchaseLen:"12",
+        specCol:"400 x 400", specRail:"428 x 407, 394 x 398", specTie:"400 x 400", specReinforce:"364 x 371", specBrace:"700 x 300",
+        knownTons:"10000", knownLen:"76" } },
+    { name:"1號台車", location:"", inputs:{ railLen:"16", tieLen:"5", colCount:"8", colLen:"5", braceLen:"2", hasReinforce:false, hasBrace:true, purchaseLen:"12",
+        specCol:"400 x 400", specRail:"428 x 407, 394 x 398", specTie:"400 x 400", specReinforce:"364 x 371", specBrace:"700 x 300",
+        knownTons:"10000", knownLen:"76" } },
+    { name:"3號台車", location:"", inputs:{ railLen:"16", tieLen:"3", colCount:"8", colLen:"5", braceLen:"2", hasReinforce:false, hasBrace:true, purchaseLen:"12",
+        specCol:"400 x 400", specRail:"428 x 407, 394 x 398", specTie:"400 x 400", specReinforce:"364 x 371", specBrace:"700 x 300",
+        knownTons:"10000", knownLen:"76" } }
+  ];
+
+  function computeProjectSummaryFromInputs(inputs){
+    applyProjectInputs(inputs); // also calls recompute(), so the snapshot below reflects real BOM/match/groupcap
+    const dims = readDims();
+    const bom = computeBOM(dims);
+    const match = computeMatch(bom, inventory, dims.purchaseLen);
+    const gc = computeGroupCapacity(match);
+    return projectSummary(dims, bom, match, gc);
+  }
+
+  function seedDefaultProjectsIfEmpty(){
+    let alreadySeeded = false;
+    try { alreadySeeded = localStorage.getItem(PROJECTS_SEEDED_KEY) === "1"; } catch(e){ /* storage disabled — just seed in-memory each time, harmless */ }
+    if (alreadySeeded) return;
+    const formSnapshot = collectProjectInputs(); // preserve whatever the form currently shows
+    DEFAULT_PROJECTS_SEED.forEach((preset, i) => {
+      projects.push({
+        id: "seed_p" + i,
+        name: preset.name,
+        location: preset.location || "",
+        savedAt: new Date().toISOString(),
+        inputs: preset.inputs,
+        summary: computeProjectSummaryFromInputs(preset.inputs),
+        photos: []
+      });
+    });
+    applyProjectInputs(formSnapshot); // restore the form to what it was before seeding
+    saveProjectsToStorage();
+    try { localStorage.setItem(PROJECTS_SEEDED_KEY, "1"); } catch(e){ /* storage disabled — will just reseed next load, harmless */ }
+  }
+
+  // ------------------------------------------------------------- cloud sync
+  // When this page is opened through its published web link inside the real
+  // claude.ai artifact viewer, it can be granted a small shared database +
+  // asset store ("db"/"assets" capabilities) so every device that opens the
+  // SAME link sees the SAME saved projects and photos — instead of each
+  // browser keeping its own separate localStorage copy. This is entirely
+  // progressive: if the capability isn't available (the page was opened as
+  // a downloaded local file, or the grant isn't there), everything above
+  // keeps working exactly as before, on this device's local storage only.
+  let cloudDb = null, cloudAssets = null, cloudMode = false, cloudUnsubProjects = null, cloudDownloads = null;
+  const CLOUD_HOLDER = "h" + Date.now() + "_" + Math.random().toString(36).slice(2,8);
+
+  // Offers a generated file (Excel export, project backup JSON) to the
+  // viewer. Inside the real published artifact view, a script-driven
+  // <a download> click is inert (the viewer sandbox never hands the page
+  // download permission) — the "downloads" capability is the real way to
+  // hand a file to the viewer there. Falls back to the classic blob-link
+  // click for the standalone local file (not sandboxed, so it works fine).
+  async function offerDownload(filename, blob){
+    if (cloudDownloads){
+      try { await cloudDownloads.save({ filename: filename, data: blob }); return; }
+      catch(e){
+        if (e && e.code === "declined") return; // viewer said no — don't also pop the fallback link
+        console.warn("downloads.save failed, falling back to direct link", e);
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function cloudPhotoUrl(assetId){ return "/_blob/" + assetId; }
+
+  function dataUrlToBlob(dataUrl){
+    const comma = dataUrl.indexOf(",");
+    const meta = dataUrl.slice(0, comma), b64 = dataUrl.slice(comma + 1);
+    const mimeMatch = /data:(.*?);base64/.exec(meta);
+    const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  }
+
+  // Cloud project docs store photos as [{id, assetId, addedAt}] (no image
+  // bytes in the document — those live in the asset store, well under the
+  // 256KiB per-document limit even with many photos). Normalizing adds a
+  // computed .dataUrl per photo so every existing render/print/lightbox
+  // function (which all read ph.dataUrl) keeps working unchanged.
+  function normalizeCloudDoc(id, data){
+    data = data || {};
+    const photos = Array.isArray(data.photos) ? data.photos.map(ph => Object.assign({}, ph, {
+      dataUrl: ph.assetId ? cloudPhotoUrl(ph.assetId) : (ph.dataUrl || "")
+    })) : [];
+    return {
+      id: id,
+      name: data.name || "",
+      location: data.location || "",
+      savedAt: data.savedAt || "",
+      inputs: data.inputs || {},
+      summary: data.summary || {},
+      photos: photos
+    };
+  }
+
+  function updateStorageModeNote(){
+    const badgeHtml = cloudMode
+      ? "<span class='pill good'>☁️ 雲端共用中——所有裝置同步</span>"
+      : "<span class='pill warn'>📱 僅本機儲存——資料只在這台裝置</span>";
+    ["storage-mode-badge-projects","storage-mode-badge-gallery"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = badgeHtml;
+    });
+    const noteEl = document.getElementById("projects-callout-note");
+    if (noteEl){
+      noteEl.innerHTML = cloudMode
+        ? "<b>說明：</b>已內建5個場地的專案範例，可直接勾選比較、載入編輯或刪除；按「詳情」可以看到該專案完整的型鋼需求、供需比對、可配組數，也可以在那裡新增組立照片、匯出Excel或列印該專案的型鋼需求與組立圖。<br>目前是「雲端共用」模式：只要用同一個網頁連結開啟，不管手機或電腦、不同人開，看到的都是同一份專案與照片，新增或刪除會自動同步給所有人，不需要再手動匯出匯入（匯出/匯入仍可用來做備份，或把舊的本機資料搬進雲端）。"
+        : "<b>說明：</b>已內建5個場地的專案範例（維修區／304K區1號／304K區2號／1號台車／3號台車，取自型鋼需求試算表的實際尺寸），可直接勾選比較、載入編輯或刪除；按「詳情」可以看到該專案完整的型鋼需求、供需比對、可配組數，也可以在那裡新增組立照片、匯出Excel或列印該專案的型鋼需求與組立圖。<br>專案存檔只保留①②③的尺寸／規格／噸位換算基準設定與試算結果快照，不含庫存清單（庫存清單為共用資料，載入專案不會覆蓋現有庫存）。存檔（含照片）僅保存在目前這台電腦的瀏覽器裡；若要跨電腦使用或分享給同事，請用「匯出專案檔」另存成一個檔案，對方再用「匯入專案檔」讀取，或改用網頁連結開啟本工具以自動啟用雲端共用。";
+    }
+    const footNote = document.getElementById("footer-storage-note");
+    if (footNote){
+      footNote.innerHTML = cloudMode
+        ? "「歷史專案」：目前以「雲端共用」模式運作——存檔（含地點與組立照片）會存進這個網頁連結背後的共用資料庫；只要是同一個組織、用同一個連結開啟，任何裝置、任何人看到的都是同一份資料，新增或刪除也會自動同步給所有人。載入專案只會覆蓋①②③的設定，不會更動庫存清單。「匯出專案檔」仍可用來另存一份純備份。"
+        : "「歷史專案」：存檔會把當下①②③的輸入與試算結果快照（含地點與組立照片）存進這台電腦的瀏覽器（localStorage），重新整理頁面後仍會保留；清除瀏覽器資料或換電腦、換瀏覽器則會遺失，請用「匯出專案檔」定期備份或跨電腦分享。載入專案只會覆蓋①②③的設定，不會更動庫存清單。";
+    }
+  }
+
+  function subscribeCloudProjects(){
+    if (cloudUnsubProjects) cloudUnsubProjects();
+    cloudUnsubProjects = cloudDb.collection("projects").onSnapshot(snap => {
+      projects = snap.docs.map(d => normalizeCloudDoc(d.id, d.data()));
+      paintProjects(); paintGallery(); updateLandingCounts();
+      if (!document.getElementById("project-detail-overlay").hidden && currentDetailProjectId){
+        const p = findProject(currentDetailProjectId);
+        if (p) renderProjectDetailPhotos(p); // keep an open detail modal's photo grid live too
+      }
+    }, err => { console.warn("雲端專案同步發生問題", err); });
+  }
+
+  // First device to find an empty cloud project list seeds the 5 sample
+  // projects (mirrors seedDefaultProjectsIfEmpty's local behavior). A short
+  // lease on a marker document keeps two devices opening the link at the
+  // same moment from both seeding and creating duplicates.
+  async function ensureCloudSeeded(){
+    const lockRef = cloudDb.doc("meta/seedLock");
+    try {
+      const lease = await lockRef.acquire({ holder: CLOUD_HOLDER, ttlMs: 8000 });
+      if (!lease.acquired) return; // another device is seeding right now
+      const snap = await lockRef.get();
+      if (snap.exists && snap.data() && snap.data().seeded) return; // already done
+      const existing = await cloudDb.collection("projects").limit(1).get();
+      if (!existing.empty){ await lockRef.set({ seeded: true }); return; }
+      const formSnapshot = collectProjectInputs();
+      for (let i = 0; i < DEFAULT_PROJECTS_SEED.length; i++){
+        const preset = DEFAULT_PROJECTS_SEED[i];
+        const summary = computeProjectSummaryFromInputs(preset.inputs);
+        await cloudDb.collection("projects").add({
+          name: preset.name, location: preset.location || "", savedAt: new Date().toISOString(),
+          inputs: preset.inputs, summary: summary, photos: []
+        });
+      }
+      applyProjectInputs(formSnapshot);
+      await lockRef.set({ seeded: true });
+    } catch(e){ console.warn("雲端範例專案初始化失敗", e); }
+  }
+
+  async function initCloudSync(){
+    if (!window.claude || typeof window.claude.use !== "function") return; // not a real published artifact view (e.g. a locally-opened file)
+    let db, assets, downloads;
+    try { [db, assets, downloads] = await Promise.all([window.claude.use("db"), window.claude.use("assets"), window.claude.use("downloads")]); }
+    catch(e){ console.warn("雲端功能偵測失敗", e); return; }
+    cloudDownloads = downloads || null; // independent of db/assets — offerDownload() uses it whenever it's there
+    if (!db || !assets) return; // shared storage not granted in this view — stay on local storage
+    cloudDb = db; cloudAssets = assets; cloudMode = true;
+    updateStorageModeNote();
+    await ensureCloudSeeded();
+    subscribeCloudProjects();
+  }
+
+  function escHtml(s){
+    return String(s==null?"":s).replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
+  }
+  function fmtOrDash(v){ return (v===undefined || v===null || isNaN(v)) ? "—" : fmt(v); }
+  function fmtDate(iso){
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return "";
+      return d.getFullYear()+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+String(d.getDate()).padStart(2,"0")+" "+
+        String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+    } catch(e){ return ""; }
+  }
+
+  async function saveProject(){
+    const nameInput = document.getElementById("proj-name");
+    const locInput = document.getElementById("proj-location");
+    const name = nameInput.value.trim();
+    if (!name){ nameInput.focus(); return; }
+    const dims = readDims();
+    const bom = computeBOM(dims);
+    const match = computeMatch(bom, inventory, dims.purchaseLen);
+    const gc = computeGroupCapacity(match);
+    const data = {
+      name: name,
+      location: locInput ? locInput.value.trim() : "",
+      savedAt: new Date().toISOString(),
+      inputs: collectProjectInputs(),
+      summary: projectSummary(dims, bom, match, gc),
+      photos: []
+    };
+    if (cloudMode){
+      try { await cloudDb.collection("projects").add(data); } // subscribeCloudProjects() re-renders once this lands
+      catch(e){ alert("存成專案失敗（雲端）：" + (e && e.message ? e.message : e)); return; }
+    } else {
+      projects.push(Object.assign({ id: "p" + Date.now() + "_" + Math.random().toString(36).slice(2,7) }, data));
+      saveProjectsToStorage();
+      paintProjects();
+    }
+    nameInput.value = "";
+    if (locInput) locInput.value = "";
+  }
+
+  async function deleteProject(id){
+    compareChecked.delete(id);
+    if (cloudMode){
+      const proj = findProject(id);
+      try { await cloudDb.doc("projects/"+id).delete(); }
+      catch(e){ alert("刪除專案失敗（雲端）：" + (e && e.message ? e.message : e)); return; }
+      // best-effort cleanup of this project's uploaded photos — a failed delete here just leaves an orphaned asset, harmless
+      if (proj && Array.isArray(proj.photos)){
+        proj.photos.forEach(ph => { if (ph.assetId) cloudAssets.delete(ph.assetId).catch(()=>{}); });
+      }
+      return;
+    }
+    projects = projects.filter(p => p.id !== id);
+    saveProjectsToStorage();
+    paintProjects();
+  }
+
+  function populateLocationFilter(){
+    const sel = document.getElementById("filter-location");
+    if (!sel) return;
+    const prev = sel.value;
+    const locs = Array.from(new Set(projects.map(p => (p.location||"").trim()).filter(Boolean))).sort(function(a,b){ return a.localeCompare(b, "zh-Hant"); });
+    sel.innerHTML = "<option value=''>全部地點</option>" + locs.map(loc => "<option value='"+escHtml(loc)+"'>"+escHtml(loc)+"</option>").join("");
+    if (locs.indexOf(prev) !== -1) sel.value = prev; // keep the user's filter choice across re-renders when still valid
+  }
+
+  function paintProjects(){
+    populateLocationFilter();
+    const host = document.getElementById("project-cards");
+    const locFilter = (document.getElementById("filter-location")||{}).value || "";
+    const statusFilter = (document.getElementById("filter-status")||{}).value || "";
+    host.innerHTML = "";
+
+    if (projects.length === 0){
+      host.innerHTML = "<div class='project-card-empty'>尚未存檔——填好①②③設定後，在上方輸入專案名稱並按「存成專案」</div>";
+      document.getElementById("filter-count").textContent = "";
+      document.getElementById("compare-wrap").style.display = "none";
+      return;
+    }
+
+    const filtered = projects.filter(p => {
+      if (locFilter && (p.location||"") !== locFilter) return false;
+      if (statusFilter && (p.summary||{}).status !== statusFilter) return false;
+      return true;
+    });
+    document.getElementById("filter-count").textContent = filtered.length + " / " + projects.length + " 個專案";
+
+    if (filtered.length === 0){
+      host.innerHTML = "<div class='project-card-empty'>沒有符合篩選條件的專案，換個地點或狀態看看。</div>";
+      return;
+    }
+
+    filtered.forEach(p => {
+      const s = p.summary || {};
+      const photoCount = Array.isArray(p.photos) ? p.photos.length : 0;
+      const card = document.createElement("div");
+      card.className = "project-card";
+
+      const head = document.createElement("div");
+      head.className = "pc-head";
+      const chk = document.createElement("input");
+      chk.type = "checkbox"; chk.className = "pc-check"; chk.checked = compareChecked.has(p.id);
+      chk.title = "勾選以比較";
+      chk.addEventListener("change", e => {
+        if (e.target.checked) compareChecked.add(p.id); else compareChecked.delete(p.id);
+        if (document.getElementById("compare-wrap").style.display !== "none") paintCompare();
+      });
+      head.appendChild(chk);
+      const titleWrap = document.createElement("div");
+      titleWrap.innerHTML = "<div class='pc-title'>"+escHtml(p.name)+"</div>" +
+        (p.location ? "<span class='pc-loc'>📍 "+escHtml(p.location)+"</span>" : "");
+      head.appendChild(titleWrap);
+      card.appendChild(head);
+
+      const meta = document.createElement("div");
+      meta.className = "pc-meta";
+      meta.innerHTML =
+        "全長 <b>"+fmtOrDash(s.railLen)+"m</b> ・ 寬度 <b>"+fmtOrDash(s.tieLen)+"m</b><br>" +
+        "BOM合計 <b>"+fmtOrDash(s.bomTotal)+"m</b> ・ 可配組數 <b>"+(s.maxSets!=null?s.maxSets:"—")+"</b>";
+      card.appendChild(meta);
+
+      const tags = document.createElement("div");
+      tags.className = "pc-tags";
+      tags.innerHTML = "<span class='pill "+(s.status||"")+"'>"+(STATUS_LABEL[s.status]||"—")+"</span>" +
+        (photoCount > 0 ? "<span class='gp-meta'>📷 "+photoCount+" 張照片</span>" : "");
+      card.appendChild(tags);
+
+      const time = document.createElement("div");
+      time.className = "pc-time";
+      time.textContent = "儲存時間：" + fmtDate(p.savedAt);
+      card.appendChild(time);
+
+      const actions = document.createElement("div");
+      actions.className = "pc-actions";
+      const detailBtn = document.createElement("button");
+      detailBtn.type = "button"; detailBtn.className = "small"; detailBtn.textContent = "詳情";
+      detailBtn.addEventListener("click", () => openProjectDetail(p));
+      const loadBtn = document.createElement("button");
+      loadBtn.type = "button"; loadBtn.className = "small"; loadBtn.textContent = "載入";
+      loadBtn.addEventListener("click", () => applyProjectInputs(p.inputs));
+      const delBtn = document.createElement("button");
+      delBtn.type = "button"; delBtn.className = "small danger"; delBtn.textContent = "刪除";
+      delBtn.addEventListener("click", () => deleteProject(p.id));
+      actions.appendChild(detailBtn); actions.appendChild(loadBtn); actions.appendChild(delBtn);
+      card.appendChild(actions);
+
+      host.appendChild(card);
+    });
+  }
+
+  function paintCompare(){
+    const wrap = document.getElementById("compare-wrap");
+    const selected = projects.filter(p => compareChecked.has(p.id));
+    if (selected.length === 0){
+      wrap.style.display = "none";
+      return;
+    }
+    wrap.style.display = "block";
+    const rows = [
+      ["地點", p => p.location ? escHtml(p.location) : "—"],
+      ["全長(m)", p => fmtOrDash(p.summary.railLen)],
+      ["寬度(m)", p => fmtOrDash(p.summary.tieLen)],
+      ["立柱支數", p => p.summary.colCount!=null ? p.summary.colCount : "—"],
+      ["立柱高度(m)", p => fmtOrDash(p.summary.colLen)],
+      ["斜撐單長(m)", p => fmtOrDash(p.summary.braceLen)],
+      ["含中間補強地枕", p => p.summary.hasReinforce ? "是" : "否"],
+      ["含斜撐", p => p.summary.hasBrace !== false ? "是" : "否"],
+      ["BOM合計(m)", p => fmtOrDash(p.summary.bomTotal)],
+      ["需求總長(m)", p => fmtOrDash(p.summary.totalDemand)],
+      ["總缺口(m)", p => fmtOrDash(p.summary.totalShort)],
+      ["建議採購支數", p => p.summary.totalPurchase!=null ? p.summary.totalPurchase : "—"],
+      ["供需狀態", p => STATUS_LABEL[p.summary.status]||"—"],
+      ["可配組數", p => p.summary.maxSets!=null ? p.summary.maxSets : "—"],
+      ["儲存時間", p => fmtDate(p.savedAt)]
+    ];
+    let html = "<thead><tr><th>項目</th>" + selected.map(p => "<th>"+escHtml(p.name)+"</th>").join("") + "</tr></thead><tbody>";
+    rows.forEach(row => {
+      const label = row[0], fn = row[1];
+      html += "<tr><td>"+label+"</td>" + selected.map(p => "<td class='num'>"+fn(p)+"</td>").join("") + "</tr>";
+    });
+    html += "</tbody>";
+    document.getElementById("compare-table").innerHTML = html;
+  }
+
+  async function exportProjectsFile(){
+    try {
+      if (projects.length === 0){ alert("目前沒有已存的專案可以匯出。"); return; }
+      const blob = new Blob([JSON.stringify(projects, null, 2)], { type: "application/json" });
+      const now = new Date();
+      const stamp = now.getFullYear()+String(now.getMonth()+1).padStart(2,"0")+String(now.getDate()).padStart(2,"0");
+      await offerDownload("型鋼配料專案_"+stamp+".json", blob);
+    } catch(e){
+      alert("匯出專案檔時發生錯誤：" + (e && e.message ? e.message : e));
+    }
+  }
+
+  function importProjectsFile(file){
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (!Array.isArray(data)) throw new Error("檔案格式不正確（不是專案清單）");
+        let added = 0, skipped = 0, photoMigrateFails = 0;
+        if (cloudMode){
+          // Importing into cloud mode also serves as the "move my old local
+          // data into the shared cloud" path: a photo that already has an
+          // assetId (came from a cloud export) is just re-referenced; an
+          // old-style embedded base64 dataUrl (from a pre-cloud local export)
+          // gets uploaded to the asset store so it becomes a real cloud photo.
+          const existingIds = new Set(projects.map(p => p.id));
+          for (const p of data){
+            if (!p || !p.name || !p.inputs) continue;
+            if (p.id && existingIds.has(p.id)){ skipped++; continue; }
+            const photos = [];
+            const srcPhotos = Array.isArray(p.photos) ? p.photos : [];
+            for (const ph of srcPhotos){
+              if (!ph) continue;
+              if (ph.assetId){
+                photos.push({ id: ph.id || ("ph"+Date.now()+"_"+Math.random().toString(36).slice(2,7)), assetId: ph.assetId, addedAt: ph.addedAt || new Date().toISOString() });
+              } else if (ph.dataUrl && ph.dataUrl.indexOf("data:") === 0){
+                try {
+                  const res = await cloudAssets.upload(dataUrlToBlob(ph.dataUrl), { type: "image/jpeg" });
+                  photos.push({ id: ph.id || ("ph"+Date.now()+"_"+Math.random().toString(36).slice(2,7)), assetId: res.id, addedAt: ph.addedAt || new Date().toISOString() });
+                } catch(e){ photoMigrateFails++; }
+              }
+            }
+            try {
+              await cloudDb.collection("projects").add({
+                name: p.name, location: p.location || "", savedAt: p.savedAt || new Date().toISOString(),
+                inputs: p.inputs, summary: p.summary || {}, photos: photos
+              });
+              added++;
+            } catch(e){ skipped++; }
+          }
+        } else {
+          data.forEach(p => {
+            if (!p || !p.name || !p.inputs) return;
+            if (p.id && projects.some(existing => existing.id === p.id)){ skipped++; return; } // already have this exact project — don't duplicate on re-import
+            const id = p.id || ("p" + Date.now() + "_" + Math.random().toString(36).slice(2,7));
+            projects.push({ id: id, name: p.name, location: p.location || "", savedAt: p.savedAt || new Date().toISOString(), inputs: p.inputs, summary: p.summary || {}, photos: Array.isArray(p.photos) ? p.photos : [] });
+            added++;
+          });
+          saveProjectsToStorage();
+          paintProjects();
+        }
+        const msg = added > 0
+          ? ("已匯入 "+added+" 個專案。" + (skipped > 0 ? ("（另有 "+skipped+" 個已存在或失敗，略過）") : "") + (photoMigrateFails > 0 ? ("\n有 "+photoMigrateFails+" 張照片搬移失敗。") : ""))
+          : (skipped > 0 ? "這些專案都已經存在，沒有新增。" : "這個檔案裡沒有可以匯入的專案資料。");
+        alert(msg);
+      } catch(e){
+        alert("匯入專案檔失敗，請確認這是本工具匯出的專案檔：" + (e && e.message ? e.message : e));
+      }
+    };
+    reader.onerror = () => alert("讀取檔案失敗，請重試。");
+    reader.readAsText(file);
+  }
+
+  document.getElementById("btn-save-project").addEventListener("click", saveProject);
+  document.getElementById("btn-export-projects").addEventListener("click", exportProjectsFile);
+  document.getElementById("btn-import-projects").addEventListener("click", () => document.getElementById("file-import-projects").click());
+  document.getElementById("file-import-projects").addEventListener("change", e => {
+    const file = e.target.files && e.target.files[0];
+    if (file) importProjectsFile(file);
+    e.target.value = "";
+  });
+  document.getElementById("btn-compare-projects").addEventListener("click", paintCompare);
+  document.getElementById("filter-location").addEventListener("change", paintProjects);
+  document.getElementById("filter-status").addEventListener("change", paintProjects);
+
+  // ------------------------------------------------------------------ photos
+  // Photos are attached per-project (base64 JPEG data URLs), resized client
+  // side before storing so a handful of site photos don't blow past
+  // localStorage's ~5-10MB per-origin quota.
+  const PHOTO_MAX_DIM = 1440, PHOTO_QUALITY = 0.82;
+
+  function looksLikeImageFile(f){
+    if (f.type && f.type.indexOf("image/") === 0) return true;
+    if (!f.type){
+      // Some mobile browsers (notably iOS Safari for HEIC/HEIF camera photos) leave
+      // file.type blank — don't silently drop these; fall back to the file extension
+      // since the OS picker was already limited to images via accept="image/*".
+      return /\.(jpe?g|png|gif|webp|bmp|heic|heif|tiff?)$/i.test(f.name || "");
+    }
+    return false;
+  }
+
+  function resizePhotoFile(file, maxDim, quality){
+    maxDim = maxDim || PHOTO_MAX_DIM; quality = quality || PHOTO_QUALITY;
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("讀取照片失敗"));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error(/\.hei[cf]$/i.test(file.name || "") || /heic|heif/i.test(file.type || "")
+          ? "這張照片可能是 iPhone 的 HEIC 格式，這個瀏覽器無法讀取。請到手機「設定→相機→格式」改成「最相容」，或改用 JPG/PNG 檔再試一次。"
+          : "無法辨識這個圖片檔"));
+        img.onload = () => {
+          let w = img.naturalWidth, h = img.naturalHeight;
+          if (Math.max(w,h) > maxDim){
+            const scale = maxDim / Math.max(w,h);
+            w = Math.round(w*scale); h = Math.round(h*scale);
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = w || 1; canvas.height = h || 1;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, w, h);
+          try { resolve(canvas.toDataURL("image/jpeg", quality)); }
+          catch(e){ reject(e); }
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // When localStorage is nearly full (common when this file is opened locally
+  // rather than from the hosted link — some mobile browsers grant local/offline
+  // pages a much smaller storage quota), retry the just-added photos at
+  // progressively smaller size/quality instead of failing outright.
+  const PHOTO_QUOTA_FALLBACKS = [ {maxDim: 900, quality: 0.6}, {maxDim: 600, quality: 0.45} ];
+
+  function findProject(id){ return projects.find(p => p.id === id) || null; }
+
+  // Cloud-mode photo add: resize locally same as always, then upload each
+  // resized JPEG to the shared asset store and append {id, assetId, addedAt}
+  // references onto the project's cloud document — no image bytes in the
+  // document itself, so there's no localStorage-style quota to hit here.
+  async function addPhotosToProjectCloud(projectId, files, onDone){
+    const uploaded = [];
+    const failMessages = [];
+    for (const f of files){
+      try {
+        const dataUrl = await resizePhotoFile(f);
+        const res = await cloudAssets.upload(dataUrlToBlob(dataUrl), { type: "image/jpeg" });
+        uploaded.push({ id: "ph"+Date.now()+"_"+Math.random().toString(36).slice(2,7), assetId: res.id, addedAt: new Date().toISOString() });
+      } catch(e){
+        console.warn(e);
+        failMessages.push(typeof e === "string" ? e : (e && e.message ? e.message : "上傳失敗"));
+      }
+    }
+    if (uploaded.length > 0){
+      try {
+        const ref = cloudDb.doc("projects/"+projectId);
+        await ref.acquire({ holder: CLOUD_HOLDER, ttlMs: 8000 }).catch(() => ({ acquired:false })); // best-effort — proceed either way
+        const snap = await ref.get();
+        const cur = (snap.exists && Array.isArray((snap.data()||{}).photos)) ? snap.data().photos : [];
+        await ref.update({ photos: cur.concat(uploaded) });
+      } catch(e){
+        alert("照片上傳成功，但存進專案時失敗，請重新整理後再試一次：" + (e && e.message ? e.message : e));
+        if (onDone) onDone();
+        return;
+      }
+    }
+    if (failMessages.length){
+      const failCount = failMessages.length;
+      if (uploaded.length === 0) alert("這 "+failCount+" 張照片都沒有上傳成功。\n\n"+failMessages[0]);
+      else alert("有 "+failCount+" 張照片上傳失敗，其餘 "+uploaded.length+" 張已新增。\n\n"+failMessages[0]);
+    }
+    if (onDone) onDone(); // subscribeCloudProjects()'s onSnapshot repaints the gallery/detail view once the write lands
+  }
+
+  async function addPhotosToProject(projectId, fileList, onDone){
+    const rawList = Array.from(fileList || []);
+    const files = rawList.filter(looksLikeImageFile);
+    if (rawList.length > 0 && files.length === 0){
+      alert("選到的檔案看起來不是圖片格式（或這個瀏覽器不認得它），請改選 JPG/PNG 照片再試一次。");
+      if (onDone) onDone();
+      return;
+    }
+    if (files.length === 0){ if (onDone) onDone(); return; }
+    if (cloudMode) return addPhotosToProjectCloud(projectId, files, onDone);
+
+    const results = await Promise.all(files.map(f => resizePhotoFile(f).catch(e => { console.warn(e); return e && e.message ? e.message : true; })));
+
+    const proj = findProject(projectId);
+    if (!proj){ if (onDone) onDone(); return; }
+    if (!Array.isArray(proj.photos)) proj.photos = [];
+
+    let addedCount = 0;
+    const failMessages = [];
+    const addedEntries = []; // {file, entry} — kept so we can re-encode smaller if storage is tight
+    results.forEach((r, i) => {
+      if (typeof r === "string" && r.indexOf("data:image") === 0){
+        const entry = { id: "ph"+Date.now()+"_"+Math.random().toString(36).slice(2,7), dataUrl: r, addedAt: new Date().toISOString() };
+        proj.photos.push(entry);
+        addedEntries.push({ file: files[i], entry });
+        addedCount++;
+      } else if (typeof r === "string"){
+        failMessages.push(r);
+      }
+    });
+
+    let ok = saveProjectsToStorage();
+    let shrunk = false;
+    if (!ok && addedEntries.length){
+      // Storage is tight — before giving up, retry just the newly-added photos at
+      // progressively smaller size/quality. This is common when the tool is opened
+      // as a local downloaded file rather than the hosted web link, since some
+      // mobile browsers grant local/offline pages a much smaller storage quota.
+      for (let tier = 0; tier < PHOTO_QUOTA_FALLBACKS.length && !ok; tier++){
+        const { maxDim, quality } = PHOTO_QUOTA_FALLBACKS[tier];
+        const smaller = await Promise.all(addedEntries.map(a => resizePhotoFile(a.file, maxDim, quality).catch(() => null)));
+        smaller.forEach((dataUrl, i) => { if (dataUrl) addedEntries[i].entry.dataUrl = dataUrl; });
+        ok = saveProjectsToStorage();
+        if (ok) shrunk = true;
+      }
+    }
+
+    if (!ok){
+      proj.photos.splice(proj.photos.length - addedCount, addedCount); // didn't actually persist — roll back
+      alert("照片沒有存成功——瀏覽器儲存空間可能已滿（就算壓縮畫質後還是存不下）。可以先刪除幾張舊照片，或改用「歷史組立圖」的網頁連結開啟本工具（而不是手機裡下載的檔案），通常會有比較大的儲存空間可用。");
+    } else if (addedCount < files.length){
+      const failCount = files.length - addedCount;
+      const detail = failMessages.length ? ("\n\n" + failMessages[0]) : "";
+      const shrunkNote = shrunk ? "\n\n（因儲存空間不足，已自動壓縮照片畫質存檔）" : "";
+      if (addedCount === 0){
+        alert("這 "+failCount+" 張照片都沒有新增成功。" + detail);
+      } else {
+        alert("有 "+failCount+" 張照片讀取失敗，其餘 "+addedCount+" 張已新增。" + detail + shrunkNote);
+      }
+    } else if (shrunk){
+      alert("儲存空間比較吃緊，這次的照片已自動壓縮成較小的畫質存起來。");
+    }
+    if (onDone) onDone();
+  }
+
+  async function deletePhotoFromProject(projectId, photoId){
+    if (cloudMode){
+      try {
+        const ref = cloudDb.doc("projects/"+projectId);
+        const snap = await ref.get();
+        const cur = (snap.exists && Array.isArray((snap.data()||{}).photos)) ? snap.data().photos : [];
+        const removed = cur.find(ph => ph.id === photoId);
+        await ref.update({ photos: cur.filter(ph => ph.id !== photoId) });
+        if (removed && removed.assetId) cloudAssets.delete(removed.assetId).catch(()=>{});
+      } catch(e){ alert("刪除照片失敗：" + (e && e.message ? e.message : e)); }
+      return;
+    }
+    const proj = findProject(projectId);
+    if (!proj || !Array.isArray(proj.photos)) return;
+    proj.photos = proj.photos.filter(ph => ph.id !== photoId);
+    saveProjectsToStorage();
+  }
+
+  function buildPhotoGridDOM(proj, editable){
+    const wrap = document.createElement("div");
+    const photos = Array.isArray(proj.photos) ? proj.photos : [];
+    if (photos.length === 0 && !editable){
+      const empty = document.createElement("p");
+      empty.className = "photo-empty"; empty.textContent = "尚未新增照片";
+      wrap.appendChild(empty);
+    }
+    const grid = document.createElement("div");
+    grid.className = "photo-grid";
+    photos.forEach(ph => {
+      const thumb = document.createElement("div");
+      thumb.className = "photo-thumb";
+      const img = document.createElement("img");
+      img.src = ph.dataUrl; img.alt = proj.name + " 組立照片";
+      img.addEventListener("click", () => openLightbox(ph.dataUrl));
+      thumb.appendChild(img);
+      if (editable){
+        const delBtn = document.createElement("button");
+        delBtn.type = "button"; delBtn.className = "photo-del"; delBtn.title = "刪除這張照片"; delBtn.textContent = "✕";
+        delBtn.addEventListener("click", e => {
+          e.stopPropagation();
+          if (!confirm("確定要刪除這張照片嗎？")) return;
+          deletePhotoFromProject(proj.id, ph.id);
+          refreshPhotoViewsFor(proj.id);
+        });
+        thumb.appendChild(delBtn);
+      }
+      grid.appendChild(thumb);
+    });
+    if (editable){
+      const addTile = document.createElement("label");
+      addTile.className = "photo-add-tile";
+      addTile.innerHTML = "<span class='plus'>＋</span><span>新增照片</span>";
+      const input = document.createElement("input");
+      input.type = "file"; input.accept = "image/*"; input.multiple = true; input.style.display = "none";
+      input.addEventListener("change", e => {
+        const files = e.target.files;
+        if (files && files.length) addPhotosToProject(proj.id, files, () => refreshPhotoViewsFor(proj.id));
+        e.target.value = "";
+      });
+      addTile.appendChild(input);
+      grid.appendChild(addTile);
+    }
+    wrap.appendChild(grid);
+    return wrap;
+  }
+
+  // re-render whichever photo-showing views are currently on screen after an
+  // add/delete, so the gallery and the detail modal stay in sync
+  function refreshPhotoViewsFor(projectId){
+    if (!document.getElementById("view-gallery").hidden) paintGallery();
+    if (!document.getElementById("project-detail-overlay").hidden && currentDetailProjectId === projectId){
+      const proj = findProject(projectId);
+      if (proj) renderProjectDetailPhotos(proj);
+    }
+  }
+
+  // ------------------------------------------------------------------ gallery
+
+  function paintGallery(){
+    const host = document.getElementById("gallery-list");
+    host.innerHTML = "";
+    if (projects.length === 0){
+      host.innerHTML = "<p class='photo-empty'>還沒有任何已存的專案——先到「歷史專案」存一個專案，才能在這裡新增組立照片。</p>";
+      return;
+    }
+    projects.forEach(p => {
+      const card = document.createElement("div");
+      card.className = "gallery-project";
+      const head = document.createElement("div");
+      head.className = "gallery-project-head";
+      const photoCount = Array.isArray(p.photos) ? p.photos.length : 0;
+      head.innerHTML =
+        "<span><span class='gp-name'>"+escHtml(p.name)+"</span>" +
+        (p.location ? " <span class='gp-meta'>"+escHtml(p.location)+"</span>" : "") + "</span>" +
+        "<span class='gp-meta'>"+photoCount+" 張照片</span>";
+      card.appendChild(head);
+
+      // 組立示意圖——跟計算頁「01 3D組立預覽」同一套畫法（含組立動畫），列印本頁
+      // 或用上方「列印報表」列印歷史組立圖時都會印出目前這個畫好的最終狀態
+      if (p.inputs){
+        const stageWrap = document.createElement("div");
+        stageWrap.className = "stagecard gallery-stage";
+        const stageHost = document.createElement("div");
+        stageWrap.appendChild(stageHost);
+        card.appendChild(stageWrap);
+        try { renderStage(dimsFromProjectInputs(p.inputs), stageHost); }
+        catch(e){ stageWrap.innerHTML = "<p class='photo-empty'>無法繪製組立圖</p>"; }
+
+        const stageActions = document.createElement("div");
+        stageActions.className = "btnbar";
+        stageActions.style.margin = "0 0 16px";
+        const printBtn = document.createElement("button");
+        printBtn.type = "button"; printBtn.className = "small";
+        printBtn.textContent = "列印本專案（型鋼需求＋組立圖）";
+        printBtn.addEventListener("click", () => printProjectSnapshot(p));
+        stageActions.appendChild(printBtn);
+        card.appendChild(stageActions);
+      }
+
+      const photoLabel = document.createElement("p");
+      photoLabel.className = "gallery-photo-label";
+      photoLabel.textContent = "實際完成照片";
+      card.appendChild(photoLabel);
+      card.appendChild(buildPhotoGridDOM(p, true));
+      host.appendChild(card);
+    });
+  }
+
+  // ------------------------------------------------------------- lightbox
+
+  function openLightbox(dataUrl){
+    document.getElementById("lightbox-img").src = dataUrl;
+    document.getElementById("lightbox-overlay").hidden = false;
+  }
+  function closeLightbox(){
+    document.getElementById("lightbox-overlay").hidden = true;
+    document.getElementById("lightbox-img").src = "";
+  }
+  document.getElementById("btn-lightbox-close").addEventListener("click", closeLightbox);
+  document.getElementById("lightbox-overlay").addEventListener("click", e => {
+    if (e.target.id === "lightbox-overlay") closeLightbox();
+  });
+
+  // ------------------------------------------------------------ project detail
+
+  let currentDetailProjectId = null;
+
+  function buildDetailInfoGrid(p, s){
+    const items = [
+      ["地點", p.location ? escHtml(p.location) : "—"],
+      ["全長(m)", fmtOrDash(s.railLen)],
+      ["寬度(m)", fmtOrDash(s.tieLen)],
+      ["立柱支數", s.colCount!=null ? s.colCount : "—"],
+      ["立柱高度(m)", fmtOrDash(s.colLen)],
+      ["斜撐單長(m)", fmtOrDash(s.braceLen)],
+      ["含中間補強地枕", s.hasReinforce ? "是" : "否"],
+      ["含斜撐", s.hasBrace !== false ? "是" : "否"],
+      ["BOM合計(m)", fmtOrDash(s.bomTotal)],
+      ["需求總長(m)", fmtOrDash(s.totalDemand)],
+      ["總缺口(m)", fmtOrDash(s.totalShort)],
+      ["建議採購支數", s.totalPurchase!=null ? s.totalPurchase : "—"],
+      ["供需狀態", STATUS_LABEL[s.status]||"—"],
+      ["可配組數", s.maxSets!=null ? s.maxSets : "—"]
+    ];
+    let html = "<div class='detail-grid'>";
+    items.forEach(it => { html += "<div class='dg-item'><div class='dg-l'>"+it[0]+"</div><div class='dg-v'>"+it[1]+"</div></div>"; });
+    html += "</div>";
+    return html;
+  }
+
+  function buildDetailBOMTable(bom){
+    let total = 0;
+    let html = "<div class='tablewrap'><table><thead><tr><th>構件</th><th>規格</th><th class='num'>單長(m)</th><th class='num'>支數</th><th class='num'>小計(m)</th></tr></thead><tbody>";
+    bom.forEach(r => {
+      total += r.subtotal;
+      html += "<tr><td>"+escHtml(r.label)+"</td><td>"+escHtml(r.spec||"")+"</td><td class='num'>"+fmtOrDash(r.unitLen)+"</td><td class='num'>"+(r.qty!=null?r.qty:"—")+"</td><td class='num'>"+fmt(r.subtotal)+"</td></tr>";
+    });
+    html += "<tr class='total'><td colspan='4'>合計</td><td class='num'>"+fmt(total)+"</td></tr>";
+    html += "</tbody></table></div>";
+    return html;
+  }
+
+  function buildDetailMatchTable(match){
+    const mt = matchTotals(match);
+    let html = "<div class='tablewrap'><table><thead><tr><th>規格</th><th class='num'>需求量(m)</th><th class='num'>同規格庫存(m)</th><th class='num'>代用庫存(m)</th><th class='num'>不足(m)</th><th class='num'>需採購支數</th><th>狀態</th></tr></thead><tbody>";
+    match.forEach(m => {
+      html += "<tr><td>"+(m.unspecified ? "尚未指定（"+escHtml(m.members.join("、"))+"）" : escHtml(m.spec))+"</td>"+
+        "<td class='num'>"+fmt(m.demand)+"</td><td class='num'>"+fmt(m.sameStock)+"</td><td class='num'>"+fmt(m.subStock)+"</td>"+
+        "<td class='num'>"+fmt(m.shortfall)+"</td><td class='num'>"+(m.purchaseCount||0)+"</td>"+
+        "<td><span class='pill "+(m.unspecified?"":(m.status||""))+"'>"+(m.unspecified ? "尚未指定規格" : (STATUS_LABEL[m.status]||"—"))+"</span></td></tr>";
+    });
+    html += "</tbody></table></div>";
+    html += "<p class='detail-mini-kpi'>需求總長 "+fmt(mt.totalDemand)+" m ・ 總缺口 "+fmt(mt.totalShort)+" m ・ 建議採購 "+mt.totalPurchase+" 支</p>";
+    return html;
+  }
+
+  function buildDetailGroupCapTable(gc){
+    let html = "<div class='tablewrap'><table><thead><tr><th>規格</th><th class='num'>每組需求量(m)</th><th class='num'>現有可用庫存(m)</th><th class='num'>可配組數</th></tr></thead><tbody>";
+    gc.rows.forEach(m => {
+      const isBottleneck = !m.unspecified && m.setsAvailable === gc.maxSets;
+      html += "<tr"+(isBottleneck?" class='bottleneck-row'":"")+"><td>"+(m.unspecified ? "尚未指定（"+escHtml(m.members.join("、"))+"）" : escHtml(m.spec))+"</td>"+
+        "<td class='num'>"+fmt(m.demand)+"</td><td class='num'>"+fmt(m.sameStock+m.subStock)+"</td>"+
+        "<td class='num'>"+(m.setsAvailable===null?"—":m.setsAvailable)+"</td></tr>";
+    });
+    html += "</tbody></table></div>";
+    html += "<p class='detail-mini-kpi'>最多可完整配出 <b>"+(gc.maxSets!=null?gc.maxSets:"—")+"</b> 組</p>";
+    return html;
+  }
+
+  function renderProjectDetailPhotos(p){
+    const host = document.getElementById("project-detail-photos");
+    if (!host) return;
+    host.innerHTML = "";
+    host.appendChild(buildPhotoGridDOM(p, true));
+  }
+
+  function openProjectDetail(p){
+    currentDetailProjectId = p.id;
+    const s = p.summary || {};
+    document.getElementById("project-detail-title").textContent = "專案詳情：" + p.name;
+    document.getElementById("project-detail-sub").textContent =
+      "儲存時間：" + fmtDate(p.savedAt) + (p.location ? "　・　地點：" + p.location : "");
+    const body = document.getElementById("project-detail-body");
+    if (!s.bom || !s.match || !s.groupcap){
+      body.innerHTML = "<p class='callout'>這個專案是舊版格式存檔，沒有完整的明細快照（僅有彙總數字）。可以按「載入」把設定帶回計算頁，畫面上的明細即會更新。</p>" + buildDetailInfoGrid(p, s);
+    } else {
+      body.innerHTML =
+        buildDetailInfoGrid(p, s) +
+        "<h4 class='detail-section-title'>型鋼需求明細（BOM）</h4>" + buildDetailBOMTable(s.bom) +
+        "<h4 class='detail-section-title'>供需比對與採購建議</h4>" + buildDetailMatchTable(s.match) +
+        "<h4 class='detail-section-title'>依目前庫存可配出幾組</h4>" + buildDetailGroupCapTable(s.groupcap);
+    }
+    const photoSection = document.createElement("div");
+    photoSection.innerHTML = "<h4 class='detail-section-title'>組立照片</h4>";
+    const photoHost = document.createElement("div");
+    photoHost.id = "project-detail-photos";
+    photoSection.appendChild(photoHost);
+    body.appendChild(photoSection);
+    renderProjectDetailPhotos(p);
+    document.getElementById("project-detail-overlay").hidden = false;
+  }
+  function closeProjectDetail(){
+    document.getElementById("project-detail-overlay").hidden = true;
+    currentDetailProjectId = null;
+  }
+  document.getElementById("btn-detail-close").addEventListener("click", closeProjectDetail);
+  document.getElementById("btn-detail-close-x").addEventListener("click", closeProjectDetail);
+  document.getElementById("project-detail-overlay").addEventListener("click", e => {
+    if (e.target.id === "project-detail-overlay") closeProjectDetail();
+  });
+
+  function dimsFromProjectInputs(inputs){
+    return {
+      railLen: parseFloat(inputs.railLen) || 0,
+      tieLen: parseFloat(inputs.tieLen) || 0,
+      colCount: Math.max(2, Math.round((parseFloat(inputs.colCount)||2)/2)*2),
+      colLen: parseFloat(inputs.colLen) || 0,
+      braceLen: parseFloat(inputs.braceLen) || 0,
+      hasReinforce: !!inputs.hasReinforce,
+      hasBrace: inputs.hasBrace !== undefined ? !!inputs.hasBrace : true, // older saved projects predate this switch — treat as "on"
+      purchaseLen: parseFloat(inputs.purchaseLen) || 12,
+      specs: {
+        col: (inputs.specCol||"").trim(), rail: (inputs.specRail||"").trim(), tie: (inputs.specTie||"").trim(),
+        reinforce: (inputs.specReinforce||"").trim(), brace: (inputs.specBrace||"").trim()
+      }
+    };
+  }
+
+  async function exportProjectExcel(p){
+    try{
+      const s = p.summary || {};
+      if (!s.bom){ alert("這個專案沒有完整的明細快照，無法匯出。"); return; }
+      if (typeof XLSX === "undefined"){
+        alert("匯出Excel需要先載入線上程式庫，但目前偵測不到網路連線（或網路阻擋了外部資源）。請確認網路連線後重新整理頁面再試一次；也可以改用「列印」直接印出或另存PDF。");
+        return;
+      }
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaBOM(s.bom)), "型鋼需求明細BOM");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaMatch(s.match)), "供需比對與採購建議");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaGroupCap(s.groupcap)), "可配組數估算");
+      const now = new Date();
+      const stamp = now.getFullYear()+String(now.getMonth()+1).padStart(2,"0")+String(now.getDate()).padStart(2,"0");
+      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      await offerDownload("型鋼配料_"+p.name+"_"+stamp+".xlsx", new Blob([wbout], { type: "application/octet-stream" }));
+    } catch(e){
+      alert("匯出Excel時發生錯誤：" + (e && e.message ? e.message : e));
+    }
+  }
+
+  // ------------------------------------------------------------- print / export
+  // window.print() is silently blocked inside the real published artifact
+  // view (same sandboxed-iframe restriction that blocked script-driven
+  // downloads — confirmed by user testing: pressing 列印 there does
+  // absolutely nothing, no dialog at all). There's no "print" capability to
+  // fix that directly, so when we detect that hosted environment
+  // (cloudDownloads only ever resolves there — the standalone local file has
+  // no window.claude at all) we instead package the already-prepared print
+  // content into a standalone HTML file and hand it to the viewer via
+  // offerDownload(); opening that file is a normal, unsandboxed browser tab
+  // where window.print() works, and the file auto-triggers it on load. In
+  // the standalone/local-file build cloudDownloads stays null, so this still
+  // calls window.print() directly there exactly as before (already works).
+
+  // A JS-set `.value`/`.checked` on an <input> never reflects into its HTML
+  // attribute, so a plain outerHTML clone would print every field blank
+  // (e.g. the whole inventory table). Bake the live value/checked state
+  // into the attribute on the CLONE before serializing so the exported
+  // snapshot matches what's actually on screen right now.
+  function cloneForPrintSnapshot(el){
+    const clone = el.cloneNode(true);
+    Array.from(clone.querySelectorAll("input")).forEach(inp => {
+      if (inp.type === "checkbox" || inp.type === "radio"){
+        if (inp.checked) inp.setAttribute("checked",""); else inp.removeAttribute("checked");
+      } else {
+        inp.setAttribute("value", inp.value);
+      }
+    });
+    Array.from(clone.querySelectorAll("select")).forEach(sel => {
+      Array.from(sel.options).forEach((opt,i) => { if (i===sel.selectedIndex) opt.setAttribute("selected",""); else opt.removeAttribute("selected"); });
+    });
+    Array.from(clone.querySelectorAll("textarea")).forEach(ta => { ta.textContent = ta.value; });
+    return clone;
+  }
+
+  function buildStandalonePrintDoc(title, bodyHtml){
+    const styleBlocks = Array.from(document.querySelectorAll("style")).map(s => s.outerHTML).join("\n");
+    const fontLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(l => l.outerHTML).join("\n");
+    return "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
+      "<title>" + escHtml(title) + "</title>" + fontLinks + styleBlocks +
+      "<style>body{background:#fff;padding:18px;} .wrap{max-width:1100px;margin:0 auto;}" +
+      "button,.invtoolbar,.side,.toolbar-export,.modal-overlay,.lightbox-overlay{display:none !important;}" +
+      ".inv-table th:last-child,.inv-table td:last-child{display:none !important;}" +
+      "input,select,textarea{pointer-events:none;}</style>" +
+      "</head><body><div class=\"wrap\">" + bodyHtml + "</div>" +
+      "<scr" + "ipt>window.addEventListener('load',function(){ setTimeout(function(){ try{ window.print(); }catch(e){} }, 400); });</scr" + "ipt>" +
+      "</body></html>";
+  }
+
+  async function printOrExportSnapshot(filenameBase, title, bodyHtml){
+    if (cloudDownloads){
+      try{
+        const doc = buildStandalonePrintDoc(title, bodyHtml);
+        await offerDownload(filenameBase + ".html", new Blob([doc], { type: "text/html" }));
+        alert("這個環境目前沒辦法直接跳出列印視窗，已改為下載一份列印用檔案。請開啟下載的檔案（會自動跳出列印視窗），或自行按 Ctrl+P／Cmd+P 列印。");
+      } catch(e){
+        alert("準備列印檔案時發生錯誤：" + (e && e.message ? e.message : e));
+      }
+      return;
+    }
+    window.print();
+  }
+
+  async function printProjectSnapshot(p){
+    const s = p.summary || {};
+    if (!s.bom){ alert("這個專案沒有完整的明細快照，請先用「載入」把設定帶回計算頁再列印。"); return; }
+    const dims = dimsFromProjectInputs(p.inputs);
+    const root = document.getElementById("project-print-root");
+    root.innerHTML =
+      "<div class='print-proj-head'><h2>"+escHtml(p.name)+"</h2>" +
+      (p.location ? "<p>地點："+escHtml(p.location)+"</p>" : "") +
+      "<p>儲存時間："+fmtDate(p.savedAt)+"</p></div>" +
+      "<h4 class='detail-section-title'>組立示意圖</h4><div class='stagecard'><div id='project-print-stage-host'></div></div>" +
+      "<h4 class='detail-section-title'>型鋼需求明細（BOM）</h4>" + buildDetailBOMTable(s.bom);
+    renderStage(dims, document.getElementById("project-print-stage-host"));
+
+    if (cloudDownloads){
+      // No live <input> fields in this snapshot (all built from strings +
+      // the freshly-rendered SVG), so root.innerHTML can be used as-is.
+      await printOrExportSnapshot("型鋼配料_"+p.name+"_列印", "型鋼配料列印 - "+p.name, root.innerHTML);
+      root.innerHTML = "";
+      return;
+    }
+    const others = Array.from(document.querySelectorAll("[data-print-section]"));
+    others.forEach(el => el.classList.add("print-hidden"));
+    root.classList.add("print-active");
+    window.print();
+    root.classList.remove("print-active");
+    others.forEach(el => el.classList.remove("print-hidden"));
+    root.innerHTML = "";
+  }
+
+  document.getElementById("btn-detail-export-excel").addEventListener("click", () => {
+    const p = findProject(currentDetailProjectId);
+    if (p) exportProjectExcel(p);
+  });
+  document.getElementById("btn-detail-print").addEventListener("click", () => {
+    const p = findProject(currentDetailProjectId);
+    if (p) printProjectSnapshot(p);
+  });
+
+  // -------------------------------------------------------------------- views
+
+  const VIEW_IDS = ["home","calc","projects","gallery"];
+  function updateLandingCounts(){
+    const pc = document.getElementById("landing-projects-count");
+    const gcEl = document.getElementById("landing-gallery-count");
+    if (pc) pc.textContent = projects.length > 0 ? (projects.length + " 個已存專案") : "尚無已存專案";
+    if (gcEl){
+      const photoTotal = projects.reduce((sum,p) => sum + (Array.isArray(p.photos)?p.photos.length:0), 0);
+      gcEl.textContent = photoTotal > 0 ? (photoTotal + " 張照片") : "尚無照片";
+    }
+  }
+  function showView(view){
+    if (VIEW_IDS.indexOf(view) === -1) view = "home";
+    VIEW_IDS.forEach(v => {
+      const el = document.getElementById("view-" + v);
+      if (el) el.hidden = (v !== view);
+    });
+    document.getElementById("header-toolbar").hidden = (view === "home");
+    document.getElementById("app-footer").hidden = !(view === "calc" || view === "projects");
+    if (view === "home") updateLandingCounts();
+    if (view === "projects") paintProjects();
+    if (view === "gallery") paintGallery();
+    window.scrollTo(0, 0);
+  }
+  document.querySelectorAll(".landing-card").forEach(card => {
+    card.addEventListener("click", () => showView(card.getAttribute("data-view")));
+  });
+  document.getElementById("btn-back-home").addEventListener("click", () => showView("home"));
+
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    if (!document.getElementById("lightbox-overlay").hidden) closeLightbox();
+    else if (!document.getElementById("project-detail-overlay").hidden) closeProjectDetail();
+    else if (!document.getElementById("print-modal-overlay").hidden) closePrintModal();
+  });
+
+  // ------------------------------------------------------------- print modal
+
+  const PRINT_PREFS_KEY = "steelCalcPrintSections_v1";
+
+  function collectPrintableSections(){
+    return Array.from(document.querySelectorAll("[data-print-section]")).filter(el => !el.closest("[hidden]"));
+  }
+  function loadPrintPrefs(){
+    try { const raw = localStorage.getItem(PRINT_PREFS_KEY); return raw ? JSON.parse(raw) : {}; }
+    catch(e){ return {}; }
+  }
+  function savePrintPrefs(prefs){
+    try { localStorage.setItem(PRINT_PREFS_KEY, JSON.stringify(prefs)); } catch(e){ /* storage disabled — harmless */ }
+  }
+  function openPrintModal(){
+    const sections = collectPrintableSections();
+    if (sections.length === 0){
+      if (cloudDownloads) printOrExportSnapshot("型鋼配料_列印", "型鋼配料列印", "");
+      else window.print();
+      return;
+    }
+    const prefs = loadPrintPrefs();
+    const list = document.getElementById("print-checklist");
+    list.innerHTML = "";
+    sections.forEach(el => {
+      const key = el.getAttribute("data-print-section");
+      const label = el.getAttribute("data-print-label") || key;
+      const checked = prefs[key] !== false; // default: everything checked
+      const cid = "printchk-" + key;
+      const li = document.createElement("li");
+      li.innerHTML = "<input type='checkbox' id='"+cid+"'" + (checked?" checked":"") + "><label for='"+cid+"'>"+escHtml(label)+"</label>";
+      li.querySelector("input").dataset.sectionKey = key;
+      list.appendChild(li);
+    });
+    document.getElementById("print-modal-overlay").hidden = false;
+  }
+  function closePrintModal(){
+    document.getElementById("print-modal-overlay").hidden = true;
+  }
+  async function confirmPrint(){
+    const list = document.getElementById("print-checklist");
+    const checks = Array.from(list.querySelectorAll("input[type=checkbox]"));
+    const prefs = {};
+    checks.forEach(chk => { prefs[chk.dataset.sectionKey] = chk.checked; });
+    savePrintPrefs(prefs);
+
+    const sections = collectPrintableSections();
+    closePrintModal();
+
+    if (cloudDownloads){
+      const included = sections.filter(el => prefs[el.getAttribute("data-print-section")] !== false);
+      const bodyHtml = included.map(el => cloneForPrintSnapshot(el).outerHTML).join("\n");
+      await printOrExportSnapshot("型鋼配料_列印", "型鋼配料列印", bodyHtml);
+      return;
+    }
+    const hiddenForPrint = [];
+    sections.forEach(el => {
+      const key = el.getAttribute("data-print-section");
+      if (prefs[key] === false){ el.classList.add("print-hidden"); hiddenForPrint.push(el); }
+    });
+    window.print();
+    hiddenForPrint.forEach(el => el.classList.remove("print-hidden"));
+  }
+  document.getElementById("btn-print-confirm").addEventListener("click", confirmPrint);
+  document.getElementById("btn-print-cancel").addEventListener("click", closePrintModal);
+  document.getElementById("btn-print-close-x").addEventListener("click", closePrintModal);
+  document.getElementById("print-modal-overlay").addEventListener("click", e => {
+    if (e.target.id === "print-modal-overlay") closePrintModal();
+  });
+
+  // ---------------------------------------------------------- export/print
+
+  function aoaBOM(bom){
+    const rows = [["構件","規格","單長(m)","支數","小計(m)"]];
+    let total = 0;
+    bom.forEach(r => { rows.push([r.label, r.spec||"", r.unitLen, r.qty, r.subtotal]); total += r.subtotal; });
+    rows.push(["合計","","","", +total.toFixed(2)]);
+    return rows;
+  }
+  function aoaMatch(match){
+    const rows = [["規格","需求量(m)","同規格庫存(m)","代用庫存(m)","不足(m)","需採購支數","狀態"]];
+    match.forEach(m => {
+      rows.push([
+        m.unspecified ? "尚未指定（"+m.members.join("、")+"）" : m.spec,
+        +m.demand.toFixed(2), +m.sameStock.toFixed(2), +m.subStock.toFixed(2), +m.shortfall.toFixed(2),
+        m.purchaseCount||0, m.unspecified ? "尚未指定規格" : STATUS_LABEL[m.status]
+      ]);
+    });
+    return rows;
+  }
+  function aoaGroupCap(gc){
+    const rows = [["規格","每組需求量(m)","現有可用庫存(m)","可配組數","是否為瓶頸"]];
+    gc.rows.forEach(m => {
+      const isBottleneck = !m.unspecified && m.setsAvailable === gc.maxSets;
+      rows.push([
+        m.unspecified ? "尚未指定（"+m.members.join("、")+"）" : m.spec,
+        +m.demand.toFixed(2), +(m.sameStock+m.subStock).toFixed(2),
+        m.setsAvailable===null ? "" : m.setsAvailable, isBottleneck ? "瓶頸" : ""
+      ]);
+    });
+    rows.push([]);
+    rows.push(["最多可完整配出（組）", gc.maxSets]);
+    return rows;
+  }
+  function aoaTonnage(t){
+    return [
+      ["項目","數值"],
+      ["每公尺全長可放噸數（估算比例）", t.ratio ? +t.ratio.toFixed(2) : ""],
+      ["目標鋼筋噸數（公噸）", t.targetTons || ""],
+      ["目前①全長（m）", t.currentRailLen],
+      ["以目前全長估算，一組可放（公噸）", t.capacityPerCurrentSet ? +t.capacityPerCurrentSet.toFixed(2) : ""],
+      ["需要幾組（沿用目前尺寸）", t.setsNeeded || ""],
+      ["若只做1組，所需全長（m）", t.singleSetLen ? +t.singleSetLen.toFixed(2) : ""]
+    ];
+  }
+  function aoaInventory(inv){
+    const rows = [["規格","單長(m)","支數","長度合計(m)","不用","可代用規格歸屬","用途備註"]];
+    inv.forEach(r => {
+      rows.push([r.spec||"", r.length||0, r.qty||0, +((r.length||0)*(r.qty||0)).toFixed(2), r.notUse?"是":"", r.subFor||"", r.note||""]);
+    });
+    return rows;
+  }
+
+  async function exportExcel(){
+    try{
+      if (typeof XLSX === "undefined"){
+        alert("匯出Excel需要先載入線上程式庫，但目前偵測不到網路連線（或網路阻擋了外部資源）。請確認網路連線後重新整理頁面再試一次；也可以改用旁邊的「列印報表」直接印出或另存PDF。");
+        return;
+      }
+      const dims = readDims();
+      const bom = computeBOM(dims);
+      const match = computeMatch(bom, inventory, dims.purchaseLen);
+      const gc = computeGroupCapacity(match);
+      const tonnage = computeTonnage(dims);
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaBOM(bom)), "型鋼需求明細BOM");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaMatch(match)), "供需比對與採購建議");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaGroupCap(gc)), "可配組數估算");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaTonnage(tonnage)), "噸位快算");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaInventory(inventory)), "庫存清單");
+
+      const now = new Date();
+      const stamp = now.getFullYear()+String(now.getMonth()+1).padStart(2,"0")+String(now.getDate()).padStart(2,"0");
+      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      await offerDownload("型鋼配料計算_"+stamp+".xlsx", new Blob([wbout], { type: "application/octet-stream" }));
+    } catch(e){
+      alert("匯出Excel時發生錯誤：" + (e && e.message ? e.message : e));
+    }
+  }
+
+  document.getElementById("btn-export-excel").addEventListener("click", exportExcel);
+  document.getElementById("btn-print").addEventListener("click", openPrintModal);
+
+  // -------------------------------------------------------------- bootstrap
+  loadSampleInventory();
+  loadProjectsFromStorage();      // render immediately from local storage — never block first paint on a cloud/permission round trip
+  seedDefaultProjectsIfEmpty();
+  paintProjects();
+  recompute();
+  showView("home");
+  updateStorageModeNote();        // shows the "📱 僅本機儲存" badge by default; flips to "☁️ 雲端共用中" below if this view gets the capability
+  initCloudSync();                // no-op outside a real published artifact view (e.g. the standalone downloaded file) — see its own comment
+})();
+</script>
+
+
+</body>
+</html>
