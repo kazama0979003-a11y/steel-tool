@@ -271,6 +271,22 @@
   .projbar .pb-loc{font-size:12px;color:var(--ink-soft);}
   .pb-state{font-size:12px;font-weight:700;}
   .pb-state.ok{color:var(--good);} .pb-state.dirty{color:var(--warn);} .pb-state.draft{color:var(--ink-soft);}
+  .pb-inv{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--line-strong);border-radius:999px;padding:3px 10px;background:var(--paper);}
+  .pb-inv input{width:auto;margin:0;}
+  .inv-off-note{display:none;font-size:13px;color:var(--ink-soft);background:var(--paper-sunk);border:1px dashed var(--line-strong);border-radius:8px;padding:10px 12px;line-height:1.7;}
+  section.inv-off > .inv-off-note{display:block;}
+  section.inv-off > :not(.section-title):not(.inv-off-note){display:none !important;}
+  .sub-box{margin-top:10px;font-size:12.5px;line-height:1.7;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--paper);}
+  .sub-box .sg{margin-top:4px;}
+  .sub-box .sc{display:block;padding-left:12px;color:var(--ink-soft);}
+  #view-calc .main > section.print-only{display:none;}
+  .rep-head h2{margin:0 0 4px;font-size:22px;}
+  .rep-head p{margin:0 0 10px;color:var(--ink-soft);}
+  .rep-sec{margin:12px 0 4px;font-weight:700;font-size:14px;}
+  .rep-kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px 14px;}
+  .rep-kv div b{display:block;font-size:15px;}
+  .rep-kv div span{font-size:11.5px;color:var(--ink-soft);}
+  .rep-list{margin:4px 0 0;padding-left:18px;font-size:13px;line-height:1.7;}
   .np-opt{display:flex;align-items:center;gap:8px;font-size:14px;margin:6px 0;cursor:pointer;}
   .np-opt input[type=radio]{width:auto;flex:none;}
   .np-opt select{width:auto;flex:1;min-width:0;}
@@ -655,6 +671,8 @@
     #view-calc .side{max-height:calc(100vh - 70px);}
   }
   @media print{
+    #view-calc .main > section.print-only{display:block !important;}
+    .projbar{display:none !important;}
     .stg-zoom{display:none !important;}
     .item{opacity:1 !important;transform:none !important;transition:none !important;}
     #view-calc .main{display:block !important;}
@@ -744,11 +762,13 @@
     <select id="pb-select" title="切換專案"></select>
     <span class="pb-loc" id="pb-loc"></span>
     <span class="pb-state" id="pb-state"></span>
+    <label class="pb-inv" title="預設不代入庫存：只算需求、叫貨、鐵板、可放噸數。勾選後才拿庫存清單比對缺口並建議可替換的尺寸。"><input type="checkbox" id="pb-useinv"> 代入庫存比對</label>
     <span class="spacer"></span>
     <button type="button" class="primary small" id="pb-new">＋ 新增專案</button>
     <button type="button" class="small" id="pb-save" title="Ctrl+S">儲存</button>
     <button type="button" class="small" id="pb-saveas">另存新專案</button>
     <button type="button" class="small" id="pb-rename">改名／地點</button>
+    <button type="button" class="small" id="pb-help" title="操作說明">？說明</button>
   </div>
 
   <div class="grid" id="view-calc" hidden>
@@ -802,6 +822,8 @@
     </aside>
 
     <main class="main">
+      <section data-print-section="s00" data-print-label="專案報告摘要（封面）" class="print-only" id="rep-sec"><div id="rep-body"></div></section>
+
       <section data-print-section="s01" data-print-label="01 3D組立預覽">
         <h2 class="section-title"><span class="idx">01</span>3D組立預覽</h2>
         <p class="section-sub">依左側尺寸繪製組立示意圖（含加強板位置），兩端立柱對齊地枕端點、中間補強地枕落在相鄰兩節正中間</p>
@@ -830,6 +852,7 @@
       <section data-print-section="s03" data-print-label="03 供需比對與採購建議">
         <h2 class="section-title"><span class="idx">03</span>供需比對與採購建議</h2>
         <p class="section-sub">同規格可用庫存＋近似規格可代用 → 缺口 → 需採購支數（邏輯同型鋼需求.xlsx）</p>
+        <div class="inv-off-note">目前<b>未代入庫存</b>。勾選上方「代入庫存比對」後，才會拿庫存清單比對缺口、算出需採購支數，並建議可替換的型鋼尺寸。需求支數、叫貨、鐵板、可放噸數都不需要庫存，可以先預估。</div>
         <div class="kpis" id="kpi-host"></div>
         <div class="tablewrap" style="margin-top:12px;">
           <table id="match-table">
@@ -840,6 +863,7 @@
             <tbody></tbody>
           </table>
         </div>
+        <div id="sub-suggest"></div>
         <p class="callout" style="margin-top:10px;">
           <b>備註：</b>以上是「總長度」比對。若同規格庫存雖總長夠、但單支長度切不出所需尺寸（例如需求12m但庫存都是9m以下的短料），
           仍需人工依實際可切割長度覆核調整採購支數。
@@ -849,6 +873,7 @@
       <section data-print-section="s04" data-print-label="04 依目前庫存可配出幾組">
         <h2 class="section-title"><span class="idx">04</span>依目前庫存可配出幾組</h2>
         <p class="section-sub">以左側①②目前設定的「一組」用量估算——現有庫存（同規格＋可代用）÷ 每組需求量，逐規格取整數，再取最小值</p>
+        <div class="inv-off-note">目前<b>未代入庫存</b>。勾選上方「代入庫存比對」後才會估算現有庫存最多能配幾組。</div>
         <div class="groupcap-stat card" id="groupcap-stat"></div>
         <div class="tablewrap" style="margin-top:12px;">
           <table id="groupcap-table">
@@ -1001,7 +1026,7 @@
           <select id="filter-location"><option value="">全部地點</option></select>
         </div>
         <div class="filter-field">
-          <label for="filter-status">供需狀態</label>
+          <label for="filter-status">庫存狀態（僅代入庫存者）</label>
           <select id="filter-status">
             <option value="">全部狀態</option>
             <option value="good">庫存充足</option>
@@ -1061,6 +1086,19 @@
         <button type="button" class="ghost" id="np-cancel">取消</button>
         <button type="button" class="primary" id="np-ok">建立並開始</button>
       </div>
+    </div>
+  </div>
+  <div class="modal-overlay" id="help-overlay" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <button type="button" class="modal-close-x" id="help-x" aria-label="關閉">✕</button>
+      <h3>怎麼用（4 步驟）</h3>
+      <ol style="line-height:1.9;padding-left:20px;margin:6px 0 0;">
+        <li><b>新增專案</b>：按「＋新增專案」，填名稱與地點，在左側填檔樁尺寸。</li>
+        <li><b>先看預估</b>：上方摘要、叫貨計算、型鋼需求明細、鐵板、可放噸數都會即時算出來——<b>不需要庫存</b>。</li>
+        <li><b>（選用）代入庫存</b>：勾選上方「代入庫存比對」，會拿目前庫存清單比對缺口，並建議可替換的型鋼尺寸。</li>
+        <li><b>做成報告</b>：按右上「列印報表」，勾選要印的區塊（含專案摘要封面）。記得按「儲存」把專案存起來。</li>
+      </ol>
+      <div class="modal-actions"><button type="button" class="primary" id="help-ok">知道了</button></div>
     </div>
   </div>
   <div class="modal-overlay" id="dg-overlay" hidden>
@@ -1127,6 +1165,7 @@
 
   let inventory = []; // {spec, length, qty, notUse, subFor, note}
   let currentProjectId = null, savedSig = "", pendingCurrent = null;
+  let invOn = false; // 是否代入庫存比對（每個專案各自記錄，預設不代入）
   const CUR_KEY = "steelCalcCurrent_v1";
   let seq = 0;
   function withId(row){ return Object.assign({ _id: "r" + (seq++) }, row); }
@@ -1585,7 +1624,66 @@
     return { totalDemand, totalShort, totalPurchase, worst };
   }
 
+  // ---- 可能替換的型鋼尺寸（代入庫存時）：缺口規格 → 庫存裡其他規格、尺寸最接近者 ----
+  function parseHB(spec){
+    const m = String(spec || "").match(/\d+(?:\.\d+)?/g) || [];
+    return m.length >= 2 ? [parseFloat(m[0]), parseFloat(m[1])] : null;
+  }
+  function computeSubstitutes(matchRows, inv){
+    const out = [];
+    matchRows.forEach(m => {
+      if (m.unspecified || !(m.shortfall > 0)) return;
+      const alts = splitAlts(m.spec);
+      const targets = alts.map(parseHB).filter(Boolean);
+      const by = new Map();
+      inv.forEach(r => {
+        if (r.notUse) return;
+        const rs = normSpec(r.spec);
+        if (!rs || alts.includes(rs)) return;
+        const sf = normSpec(r.subFor);
+        if (sf && alts.includes(sf)) return; // 已經算進「代用庫存」
+        const len = parseFloat(r.length) || 0, qty = parseFloat(r.qty) || 0;
+        if (!(len > 0 && qty > 0)) return;
+        if (!by.has(rs)) by.set(rs, { spec: r.spec, total: 0, lens: new Map(), hb: parseHB(r.spec) });
+        const g = by.get(rs);
+        g.total += len * qty;
+        g.lens.set(len, (g.lens.get(len) || 0) + qty);
+      });
+      const cands = Array.from(by.values()).map(g => {
+        let best = null;
+        if (g.hb && targets.length) targets.forEach(t => {
+          const d = [g.hb[0] - t[0], g.hb[1] - t[1]], sc = Math.abs(d[0]) + Math.abs(d[1]);
+          if (!best || sc < best.sc) best = { sc: sc, d: d };
+        });
+        return { spec: g.spec, total: g.total, lens: Array.from(g.lens.entries()).sort((a,b) => a[0]-b[0]), sc: best ? best.sc : null, d: best ? best.d : null };
+      });
+      cands.sort((a,b) => (a.sc === null) - (b.sc === null) || (a.sc - b.sc) || (b.total - a.total));
+      out.push({ spec: m.spec, shortfall: m.shortfall, purchaseCount: m.purchaseCount, cands: cands.slice(0, 3) });
+    });
+    return out;
+  }
+  function paintSubstitutes(matchRows){
+    const host = document.getElementById("sub-suggest");
+    if (!host) return;
+    if (!invOn){ host.innerHTML = ""; return; }
+    const subs = computeSubstitutes(matchRows, inventory);
+    if (!subs.length){ host.innerHTML = ""; return; }
+    let h = "<div class='sub-box'><b>可能替換的型鋼尺寸</b>（依尺寸最接近排序，僅供參考；實際可否代用需工程確認）";
+    subs.forEach(g => {
+      h += "<div class='sg'>缺 <b>" + escHtml(g.spec) + "</b> " + fmt(g.shortfall) + " m（約 " + g.purchaseCount + " 支）";
+      if (!g.cands.length) h += "<span class='sc'>庫存裡沒有其他可考慮的規格</span>";
+      g.cands.forEach(c => {
+        const lens = c.lens.map(l => fmt(l[0]) + "m×" + l[1]).join("、");
+        const diff = c.d ? "　尺寸差 " + (c.d[0] > 0 ? "+" : "") + c.d[0] + "/" + (c.d[1] > 0 ? "+" : "") + c.d[1] + " mm" : "";
+        h += "<span class='sc'>→ " + escHtml(c.spec) + "　庫存 " + lens + "（共 " + fmt(c.total) + " m）" + diff + "</span>";
+      });
+      h += "</div>";
+    });
+    host.innerHTML = h + "</div>";
+  }
+
   function paintMatch(matchRows){
+    paintSubstitutes(matchRows);
     const tbody = document.querySelector("#match-table tbody");
     tbody.innerHTML = "";
     const statusLabel = { good:"庫存充足", warn:"缺口較小", bad:"缺口較大" };
@@ -1728,7 +1826,12 @@
     tr.querySelector(".total-cell").textContent = fmt((row.length||0)*(row.qty||0));
   }
 
+  function applyInvMode(){
+    ['s03','s04'].forEach(k => { const el = document.querySelector('#view-calc section[data-print-section="' + k + '"]'); if (el) el.classList.toggle('inv-off', !invOn); });
+  }
+
   function recompute(){
+    applyInvMode();
     const dims = readDims();
     renderStage(dims);
     paintStages();
@@ -2283,12 +2386,52 @@
     let ordBars = 0, ordLen = 0;
     done.forEach(r => r.sel.parts.forEach(p => { ordBars += p.count; ordLen += p.len * p.count; }));
     const pl = platCompute(dims);
+    const tn = computeTonnage(dims);
     const cell = (v, l) => "<div class='sk'><b>" + v + "</b><span>" + l + "</span></div>";
     host.innerHTML =
       cell(fmt(bomTotal) + " m", "型鋼需求總長") +
-      cell(mt.totalPurchase + " 支", "庫存不足需採購（" + dims.purchaseLen + "M／支）") +
       cell(done.length ? (ordBars + " 支／" + fmtM(ordLen) + " m") : "—", "型鋼叫貨（選定方案）") +
-      cell(pl.valid && pl.perSheet > 0 ? (pl.pieces + " 片／" + pl.sheets + " 張") : "—", "鐵板加強板（片／叫料張數）");
+      cell(pl.valid && pl.perSheet > 0 ? (pl.pieces + " 片／" + pl.sheets + " 張") : "—", "鐵板加強板（片／叫料張數）") +
+      cell(tn.capacityPerCurrentSet > 0 ? fmt(tn.capacityPerCurrentSet) + " 噸" : "—", "可放噸數（依③換算）") +
+      (invOn ? cell(mt.totalPurchase + " 支", "庫存不足需採購（" + dims.purchaseLen + "M／支）") : "");
+    paintReport(dims, bom, bomTotal, done, ordBars, ordLen, pl, tn, mt);
+  }
+
+  // 報表封面：只在列印時顯示（.print-only），內容隨目前專案即時更新
+  function paintReport(dims, bom, bomTotal, done, ordBars, ordLen, pl, tn, mt){
+    const host = document.getElementById("rep-body");
+    if (!host) return;
+    const p = findProject(currentProjectId);
+    const d = new Date();
+    const ds = d.getFullYear() + "/" + String(d.getMonth()+1).padStart(2,"0") + "/" + String(d.getDate()).padStart(2,"0");
+    const kv = (v, l) => "<div><b>" + v + "</b><span>" + l + "</span></div>";
+    let h = "<div class='rep-head'><h2>型鋼配料報告</h2><p>專案：<b>" + escHtml(p ? p.name : "（未命名草稿）") + "</b>" +
+      (p && p.location ? "　地點：" + escHtml(p.location) : "") + "　日期：" + ds + "</p></div>";
+    h += "<div class='rep-sec'>場地條件</div><div class='rep-kv'>" +
+      kv(fmt(dims.railLen) + " m", "全長（兩側地枕）") + kv(fmt(dims.tieLen) + " m", "寬度（地枕寬）") +
+      kv(dims.colCount + " 支 × " + fmt(dims.colLen) + " m", "立柱") +
+      kv(dims.hasBrace ? fmt(dims.braceLen) + " m × " + dims.colCount : "不含", "斜撐") +
+      kv(dims.hasReinforce ? "含" : "不含", "中間補強地枕") + "</div>";
+    h += "<div class='rep-sec'>預估結果（不含庫存）</div><div class='rep-kv'>" +
+      kv(fmt(bomTotal) + " m", "型鋼需求總長") +
+      kv(done.length ? ordBars + " 支／" + fmtM(ordLen) + " m" : "—", "型鋼叫貨（選定方案）") +
+      kv(pl.valid && pl.perSheet > 0 ? pl.pieces + " 片／" + pl.sheets + " 張" : "—", "鐵板加強板（片／標準板張數）") +
+      kv(tn.capacityPerCurrentSet > 0 ? fmt(tn.capacityPerCurrentSet) + " 噸" : "—", "可放噸數（依已知噸數／全長換算）") + "</div>";
+    if (done.length){
+      h += "<div class='rep-sec'>叫貨組合（選定方案）</div><ul class='rep-list'>";
+      done.forEach(r => { h += "<li>" + escHtml(r.g.key) + "：" + ordComboText(r.sel.parts) + "（" + r.sel.bars + " 支，餘料 " + fmtM(r.sel.waste) + " m）</li>"; });
+      h += "</ul>";
+    }
+    if (pl.valid && pl.perSheet > 0){
+      const sites = plateSiteList(dims), on = sites.filter(x => x.on);
+      const grp = SITE_GROUPS.map(g => [g[1], on.filter(x => x.grp === g[0]).length]).filter(x => x[1] > 0).map(x => x[0] + " " + x[1]).join("、");
+      h += "<div class='rep-sec'>鐵板（加強板）</div><ul class='rep-list'><li>" + fmt(pl.len) + "×" + fmt(pl.wid) + " m × 厚 " + fmt(pl.thk) + " mm，單片 " + fmt(pl.unitKg) + " kg；位置：" + (grp || "無") + "</li>" +
+        "<li>共 " + pl.pieces + " 片，標準板 " + fmt(pl.slen) + "×" + fmt(pl.swid) + " m 每張切 " + pl.perSheet + " 片，需 " + pl.sheets + " 張（叫料 " + fmt(pl.buyKg) + " kg）</li>" +
+        "<li>金額：正常品 " + fmt(pl.costN) + " 元／廢棄品 " + fmt(pl.costS) + " 元</li></ul>";
+    }
+    h += "<div class='rep-sec'>庫存比對</div><p style='margin:4px 0 0;font-size:13px;'>" +
+      (invOn ? "已代入目前庫存：建議採購 " + mt.totalPurchase + " 支（" + dims.purchaseLen + "M／支），詳見後面的供需比對。" : "未代入庫存（純需求預估）。") + "</p>";
+    host.innerHTML = h;
   }
 
   initCalcTabs();
@@ -2400,6 +2543,7 @@
       knownTons: document.getElementById("in-knownTons").value,
       knownLen: document.getElementById("in-knownLen").value,
       plate: JSON.parse(JSON.stringify(platState)),
+      useInv: invOn,
       order: { lens: ordState.lens, src: ordState.src, manual: ordState.manual.map(r => Object.assign({}, r)), selected: Object.fromEntries(ordSelected) }
     };
   }
@@ -2425,20 +2569,33 @@
     else { platState.sites = {}; }   // older project without plate info: keep the plate spec/prices, drop old positions
     platSave(); platSync();
     ordApplyInputs(inputs.order);
+    invOn = !!inputs.useInv; { const cb = document.getElementById("pb-useinv"); if (cb) cb.checked = invOn; }
     stageState.step = null;
     recompute();
   }
 
-  function projectSummary(dims, bom, match, gc){
+  function hasInv(s){ return !!(s && s.useInv === true); } // 舊專案（沒有此旗標）一律視為未代入庫存
+
+  function projectSummary(dims, bom, match, gc, useInv){
     let bomTotal = 0; bom.forEach(r => { bomTotal += r.subtotal; });
     const mt = matchTotals(match);
+    if (useInv === undefined) useInv = invOn;
+    if (!useInv){
+      return {
+        railLen: dims.railLen, tieLen: dims.tieLen, colCount: dims.colCount, colLen: dims.colLen,
+        braceLen: dims.braceLen, hasReinforce: dims.hasReinforce, hasBrace: dims.hasBrace,
+        bomTotal: +bomTotal.toFixed(2), totalDemand: +mt.totalDemand.toFixed(2),
+        totalShort: null, totalPurchase: null, status: "", maxSets: null, useInv: false,
+        bom: bom, match: null, groupcap: null
+      };
+    }
     return {
       railLen: dims.railLen, tieLen: dims.tieLen, colCount: dims.colCount, colLen: dims.colLen,
       braceLen: dims.braceLen, hasReinforce: dims.hasReinforce, hasBrace: dims.hasBrace,
       bomTotal: +bomTotal.toFixed(2),
       totalDemand: +mt.totalDemand.toFixed(2), totalShort: +mt.totalShort.toFixed(2),
       totalPurchase: mt.totalPurchase, status: mt.worst,
-      maxSets: gc.maxSets,
+      maxSets: gc.maxSets, useInv: true,
       // full itemized snapshot, kept so the "詳情" project-detail view can show
       // the exact same tables as the live 02/03/04 sections without recomputing
       bom: bom, match: match, groupcap: gc
@@ -3046,7 +3203,7 @@
 
     const filtered = projects.filter(p => {
       if (locFilter && (p.location||"") !== locFilter) return false;
-      if (statusFilter && (p.summary||{}).status !== statusFilter) return false;
+      if (statusFilter && !(hasInv(p.summary) && (p.summary||{}).status === statusFilter)) return false;
       return true;
     });
     document.getElementById("filter-count").textContent = filtered.length + " / " + projects.length + " 個專案";
@@ -3082,12 +3239,12 @@
       meta.className = "pc-meta";
       meta.innerHTML =
         "全長 <b>"+fmtOrDash(s.railLen)+"m</b> ・ 寬度 <b>"+fmtOrDash(s.tieLen)+"m</b><br>" +
-        "BOM合計 <b>"+fmtOrDash(s.bomTotal)+"m</b> ・ 可配組數 <b>"+(s.maxSets!=null?s.maxSets:"—")+"</b>";
+        "BOM合計 <b>"+fmtOrDash(s.bomTotal)+"m</b>" + (hasInv(s) ? " ・ 可配組數 <b>"+(s.maxSets!=null?s.maxSets:"—")+"</b>" : "");
       card.appendChild(meta);
 
       const tags = document.createElement("div");
       tags.className = "pc-tags";
-      tags.innerHTML = "<span class='pill "+(s.status||"")+"'>"+(STATUS_LABEL[s.status]||"—")+"</span>" +
+      tags.innerHTML = (hasInv(s) ? "<span class='pill "+(s.status||"")+"'>"+(STATUS_LABEL[s.status]||"—")+"</span>" : "<span class='gp-meta'>未代入庫存</span>") +
         (photoCount > 0 ? "<span class='gp-meta'>📷 "+photoCount+" 張照片</span>" : "");
       card.appendChild(tags);
 
@@ -3140,10 +3297,10 @@
       ["含斜撐", p => p.summary.hasBrace !== false ? "是" : "否"],
       ["BOM合計(m)", p => fmtOrDash(p.summary.bomTotal)],
       ["需求總長(m)", p => fmtOrDash(p.summary.totalDemand)],
-      ["總缺口(m)", p => fmtOrDash(p.summary.totalShort)],
-      ["建議採購支數", p => p.summary.totalPurchase!=null ? p.summary.totalPurchase : "—"],
-      ["供需狀態", p => STATUS_LABEL[p.summary.status]||"—"],
-      ["可配組數", p => p.summary.maxSets!=null ? p.summary.maxSets : "—"],
+      ["總缺口(m)", p => hasInv(p.summary) ? fmtOrDash(p.summary.totalShort) : "—"],
+      ["建議採購支數", p => hasInv(p.summary) && p.summary.totalPurchase!=null ? p.summary.totalPurchase : "—"],
+      ["供需狀態", p => hasInv(p.summary) ? (STATUS_LABEL[p.summary.status]||"—") : "未代入庫存"],
+      ["可配組數", p => hasInv(p.summary) && p.summary.maxSets!=null ? p.summary.maxSets : "—"],
       ["儲存時間", p => fmtDate(p.savedAt)]
     ];
     let html = "<thead><tr><th>項目</th>" + selected.map(p => "<th>"+escHtml(p.name)+"</th>").join("") + "</tr></thead><tbody>";
@@ -3555,12 +3712,12 @@
       ["含中間補強地枕", s.hasReinforce ? "是" : "否"],
       ["含斜撐", s.hasBrace !== false ? "是" : "否"],
       ["BOM合計(m)", fmtOrDash(s.bomTotal)],
-      ["需求總長(m)", fmtOrDash(s.totalDemand)],
-      ["總缺口(m)", fmtOrDash(s.totalShort)],
-      ["建議採購支數", s.totalPurchase!=null ? s.totalPurchase : "—"],
-      ["供需狀態", STATUS_LABEL[s.status]||"—"],
-      ["可配組數", s.maxSets!=null ? s.maxSets : "—"]
+      ["需求總長(m)", fmtOrDash(s.totalDemand)]
     ];
+    if (hasInv(s)){
+      items.push(["總缺口(m)", fmtOrDash(s.totalShort)], ["建議採購支數", s.totalPurchase!=null ? s.totalPurchase : "—"],
+        ["供需狀態", STATUS_LABEL[s.status]||"—"], ["可配組數", s.maxSets!=null ? s.maxSets : "—"]);
+    } else items.push(["庫存比對", "未代入"]);
     let html = "<div class='detail-grid'>";
     items.forEach(it => { html += "<div class='dg-item'><div class='dg-l'>"+it[0]+"</div><div class='dg-v'>"+it[1]+"</div></div>"; });
     html += "</div>";
@@ -3620,8 +3777,12 @@
     document.getElementById("project-detail-sub").textContent =
       "儲存時間：" + fmtDate(p.savedAt) + (p.location ? "　・　地點：" + p.location : "");
     const body = document.getElementById("project-detail-body");
-    if (!s.bom || !s.match || !s.groupcap){
+    if (!s.bom){
       body.innerHTML = "<p class='callout'>這個專案是舊版格式存檔，沒有完整的明細快照（僅有彙總數字）。可以按「載入」把設定帶回計算頁，畫面上的明細即會更新。</p>" + buildDetailInfoGrid(p, s);
+    } else if (!hasInv(s) || !s.match || !s.groupcap){
+      body.innerHTML = buildDetailInfoGrid(p, s) +
+        "<h4 class='detail-section-title'>型鋼需求明細（BOM）</h4>" + buildDetailBOMTable(s.bom) +
+        "<p class='callout'>這個專案沒有代入庫存，所以沒有供需比對。開啟編輯後勾選「代入庫存比對」即可。</p>";
     } else {
       body.innerHTML =
         buildDetailInfoGrid(p, s) +
@@ -3676,8 +3837,8 @@
       }
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaBOM(s.bom)), "型鋼需求明細BOM");
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaMatch(s.match)), "供需比對與採購建議");
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaGroupCap(s.groupcap)), "可配組數估算");
+      if (hasInv(s) && s.match) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaMatch(s.match)), "供需比對與採購建議");
+      if (hasInv(s) && s.groupcap) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaGroupCap(s.groupcap)), "可配組數估算");
       const now = new Date();
       const stamp = now.getFullYear()+String(now.getMonth()+1).padStart(2,"0")+String(now.getDate()).padStart(2,"0");
       const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
@@ -3728,7 +3889,7 @@
     return "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
       "<title>" + escHtml(title) + "</title>" + fontLinks + styleBlocks +
       "<style>body{background:#fff;padding:18px;} .wrap{max-width:1100px;margin:0 auto;}" +
-      "button,.invtoolbar,.projbar,.side,.toolbar-export,.modal-overlay,.lightbox-overlay,.stg-zoom,.tabbar,.strip{display:none !important;}.tab-off{display:block !important;}.ord-table tr.ord-extra{display:table-row !important;}" +
+      "button,.invtoolbar,.projbar,.side,.toolbar-export,.modal-overlay,.lightbox-overlay,.stg-zoom,.tabbar,.strip{display:none !important;}.tab-off,.print-only{display:block !important;}.ord-table tr.ord-extra{display:table-row !important;}" +
       ".inv-table th:last-child,.inv-table td:last-child{display:none !important;}" +
       "input,select,textarea{pointer-events:none;}</style>" +
       "</head><body><div class=\"wrap\">" + bodyHtml + "</div>" +
@@ -3859,7 +4020,7 @@
     sections.forEach(el => {
       const key = el.getAttribute("data-print-section");
       const label = el.getAttribute("data-print-label") || key;
-      const checked = prefs[key] !== false; // default: everything checked
+      const checked = (!invOn && (key === "s03" || key === "s04" || key === "s07")) ? false : prefs[key] !== false; // default: everything checked, except inventory-based sections when 庫存 is not applied
       const cid = "printchk-" + key;
       const li = document.createElement("li");
       li.innerHTML = "<input type='checkbox' id='"+cid+"'" + (checked?" checked":"") + "><label for='"+cid+"'>"+escHtml(label)+"</label>";
@@ -3993,12 +4154,12 @@
   function blankInputs(){
     return { railLen:16, tieLen:8, colCount:8, colLen:5, braceLen:2, hasReinforce:true, hasBrace:true, purchaseLen:12,
       specCol:"400 x 400", specRail:"428 x 407, 394 x 398", specTie:"400 x 400", specReinforce:"364 x 371", specBrace:"700 x 300",
-      plate: JSON.parse(JSON.stringify(PLATE_DEFAULT)), order: null };
+      plate: JSON.parse(JSON.stringify(PLATE_DEFAULT)), order: null, useInv: false };
   }
   function summaryFromInputs(inputs){
     const dims = dimsFromProjectInputs(inputs), bom = computeBOM(dims);
     const match = computeMatch(bom, inventory, dims.purchaseLen);
-    return projectSummary(dims, bom, match, computeGroupCapacity(match));
+    return projectSummary(dims, bom, match, computeGroupCapacity(match), !!inputs.useInv);
   }
   async function createProjectRecord(name, loc, inputs){
     const data = { name:name, location:loc, savedAt:new Date().toISOString(), inputs:inputs, summary:summaryFromInputs(inputs), photos:[] };
@@ -4118,6 +4279,10 @@
   $id("np-name").addEventListener("keydown", e => { if (e.key === "Enter") submitNewProject(); });
   $id("np-cancel").addEventListener("click", () => { $id("np-overlay").hidden = true; });
   $id("np-x").addEventListener("click", () => { $id("np-overlay").hidden = true; });
+  $id("pb-useinv").addEventListener("change", e => { invOn = e.target.checked; recompute(); });
+  $id("pb-help").addEventListener("click", () => { $id("help-overlay").hidden = false; });
+  $id("help-ok").addEventListener("click", () => { $id("help-overlay").hidden = true; });
+  $id("help-x").addEventListener("click", () => { $id("help-overlay").hidden = true; });
   $id("pb-new").addEventListener("click", () => openNewProject("blank"));
   $id("landing-new").addEventListener("click", () => openNewProject("blank"));
   $id("pb-save").addEventListener("click", saveCurrent);
