@@ -2807,6 +2807,7 @@
   // lease on a marker document keeps two devices opening the link at the
   // same moment from both seeding and creating duplicates.
   async function ensureCloudSeeded(){
+    if (sharedBackend) return; // 共用資料庫從空白開始（用「匯入專案檔」帶入既有專案，避免範例重複）
     const lockRef = cloudDb.doc("meta/seedLock");
     try {
       const lease = await lockRef.acquire({ holder: CLOUD_HOLDER, ttlMs: 8000 });
@@ -2839,7 +2840,7 @@
   // of the existing cloud code paths above (save project, photos, gallery,
   // delete, import) work unchanged and everyone sees the same data.
   // Changes from other people arrive by polling every few seconds.
-  const DEFAULT_SHARED_DB_URL = ""; // optional: paste your database URL here to make it the built-in default for everyone
+  const DEFAULT_SHARED_DB_URL = "https://kazama-tungho001-default-rtdb.asia-southeast1.firebasedatabase.app"; // optional: paste your database URL here to make it the built-in default for everyone
   const SHARED_DB_KEY = "steelCalcSharedDbUrl_v1";
   const SHARED_DB_RE = /^https:\/\/[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*\.(firebaseio\.com|firebasedatabase\.app)$/i;
   const sharedSubs = new Set();
@@ -2869,24 +2870,23 @@
   }
 
   async function rtdb(method, path, body){
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 25000);
-    try {
-      const res = await fetch(sharedBase + "/" + path + ".json", {
-        method: method,
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal: ctrl.signal,
-        cache: "no-store"
-      });
+    // No AbortController/signal: inside sandboxed viewers fetch() is proxied via
+    // postMessage and an AbortSignal cannot be structured-cloned (DataCloneError).
+    let timer;
+    const timeout = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error("連線逾時")), 25000); });
+    const work = (async () => {
+      const opts = { method: method };
+      if (body !== undefined) opts.body = JSON.stringify(body);
+      const res = await fetch(sharedBase + "/" + path + ".json", opts);
       if (!res.ok){
         if (res.status === 401 || res.status === 403) throw new Error("資料庫拒絕存取，請確認 Rules 已設成 .read 與 .write 都是 true");
         throw new Error("資料庫回應錯誤（HTTP " + res.status + "）");
       }
       return await res.json();
-    } catch(e){
-      if (e && e.name === "AbortError") throw new Error("連線逾時");
-      throw e;
-    } finally { clearTimeout(timer); }
+    })();
+    work.catch(() => {});
+    try { return await Promise.race([work, timeout]); }
+    finally { clearTimeout(timer); }
   }
 
   function blobToDataUrl(blob){
