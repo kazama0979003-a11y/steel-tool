@@ -810,6 +810,7 @@
           <div class="cgrid">
             <div class="field"><label for="in-knownTons">已知總噸數<span class="unit">公噸</span></label><input type="number" id="in-knownTons" value="10000" min="0" step="100"></div>
             <div class="field"><label for="in-knownLen">已知全長合計<span class="unit">m</span></label><input type="number" id="in-knownLen" value="76" min="1" step="0.5"></div>
+            <div class="field"><label for="in-knownWid">已知配置寬度<span class="unit">m</span></label><input type="number" id="in-knownWid" value="8" min="0" step="0.5"></div>
           </div>
           <p class="cardnote" id="tonnage-ratio-note" style="margin:6px 0 0;">—</p>
         </div>
@@ -1590,11 +1591,16 @@
   // 噸位快算：容量假設與地枕「全長」成正比（寬度／立柱支數不變），比例由
   // 左側③「已知總噸數 ÷ 已知全長合計」決定。這是使用者自訂的簡化假設，
   // 不是結構工程計算，僅供初步規劃參考。
+  // 寬度修正：可放噸數依「面積（全長×寬度）」換算——已知配置寬度 = 已知噸數對應的地枕寬；
+  // 本專案寬度不同時按比例放大／縮小。已知配置寬度留空或 0 = 不計寬度（舊算法）。
   function computeTonnage(dims){
-    return computeTonnageFrom(dims, parseFloat(document.getElementById("in-knownTons").value) || 0, parseFloat(document.getElementById("in-knownLen").value) || 0);
+    const kw = document.getElementById("in-knownWid");
+    return computeTonnageFrom(dims, parseFloat(document.getElementById("in-knownTons").value) || 0, parseFloat(document.getElementById("in-knownLen").value) || 0, kw ? (parseFloat(kw.value) || 0) : 0);
   }
-  function computeTonnageFrom(dims, knownTons, knownLen){
-    const ratio = knownLen > 0 ? knownTons / knownLen : 0; // 公噸／公尺
+  function computeTonnageFrom(dims, knownTons, knownLen, knownWid){
+    const baseRatio = knownLen > 0 ? knownTons / knownLen : 0; // 公噸／公尺（在已知配置寬度下）
+    const widFactor = (knownWid > 0 && dims.tieLen > 0) ? dims.tieLen / knownWid : 1;
+    const ratio = baseRatio * widFactor; // 本專案寬度下的 公噸／公尺
     const targetTons = (document.getElementById("in-targetTons") ? parseFloat(document.getElementById("in-targetTons").value) : 0) || 0;
     const currentRailLen = dims.railLen;
     const capacityPerCurrentSet = ratio * currentRailLen;
@@ -1602,7 +1608,7 @@
     if (targetTons > 0 && capacityPerCurrentSet > 0) setsNeeded = Math.ceil(targetTons / capacityPerCurrentSet);
     let singleSetLen = null;
     if (targetTons > 0 && ratio > 0) singleSetLen = targetTons / ratio;
-    return { ratio, targetTons, currentRailLen, capacityPerCurrentSet, setsNeeded, singleSetLen };
+    return { ratio, baseRatio, widFactor, knownWid: knownWid || 0, tieLen: dims.tieLen, targetTons, currentRailLen, capacityPerCurrentSet, setsNeeded, singleSetLen };
   }
 
   // ------------------------------------------------------------------ paint
@@ -1761,7 +1767,7 @@
 
   function paintTonnage(t){
     const ratioNote = document.getElementById("tonnage-ratio-note");
-    ratioNote.textContent = t.ratio > 0 ? ("≈ 每公尺全長可放 "+fmt(t.ratio)+" 公噸") : "請填寫已知總噸數與全長合計";
+    ratioNote.textContent = t.ratio > 0 ? ("≈ 每公尺全長可放 "+fmt(t.ratio)+" 公噸" + (t.knownWid > 0 ? "（本專案寬度 "+fmt(t.tieLen)+"m ÷ 已知寬度 "+fmt(t.knownWid)+"m ＝ ×"+fmt(t.widFactor)+"）" : "")) : "請填寫已知總噸數與全長合計";
 
     const kpiHost = document.getElementById("tonnage-kpi-host");
     kpiHost.innerHTML = "";
@@ -2566,6 +2572,7 @@
       specBrace: document.getElementById("spec-brace").value,
       knownTons: document.getElementById("in-knownTons").value,
       knownLen: document.getElementById("in-knownLen").value,
+      knownWid: document.getElementById("in-knownWid").value,
       plate: JSON.parse(JSON.stringify(platState)),
       useInv: invOn,
       order: { lens: ordState.lens, src: ordState.src, manual: ordState.manual.map(r => Object.assign({}, r)), selected: Object.fromEntries(ordSelected) }
@@ -2589,6 +2596,7 @@
     document.getElementById("spec-brace").value = inputs.specBrace || "";
     if (inputs.knownTons !== undefined && inputs.knownTons !== "") document.getElementById("in-knownTons").value = inputs.knownTons;
     if (inputs.knownLen !== undefined && inputs.knownLen !== "") document.getElementById("in-knownLen").value = inputs.knownLen;
+    document.getElementById("in-knownWid").value = (inputs.knownWid !== undefined && inputs.knownWid !== "") ? inputs.knownWid : 8;
     if (inputs.plate && typeof inputs.plate === "object"){ Object.assign(platState, platNormalize(inputs.plate)); }
     else { platState.sites = {}; }   // older project without plate info: keep the plate spec/prices, drop old positions
     platSave(); platSync();
@@ -3845,7 +3853,8 @@
     const pl = platCompute(dims, st);
     const kt = (inp.knownTons !== undefined && inp.knownTons !== "") ? (parseFloat(inp.knownTons) || 0) : (parseFloat(document.getElementById("in-knownTons").value) || 0);
     const kl = (inp.knownLen !== undefined && inp.knownLen !== "") ? (parseFloat(inp.knownLen) || 0) : (parseFloat(document.getElementById("in-knownLen").value) || 0);
-    const tn = computeTonnageFrom(dims, kt, kl);
+    const kw = (inp.knownWid !== undefined && inp.knownWid !== "") ? (parseFloat(inp.knownWid) || 0) : 8; // 舊專案沒存寬度基準 → 以8m計
+    const tn = computeTonnageFrom(dims, kt, kl, kw);
     const o = inp.order || {};
     const lens = parseOrderLens(o.lens || "8-16");
     const rows = (o.src === "manual" && Array.isArray(o.manual)) ? o.manual : bom.map(r => ({ label:r.label, spec:r.spec, len:r.unitLen, qty:r.qty }));
@@ -3860,7 +3869,7 @@
     let bomTotal = 0; bom.forEach(r => { bomTotal += r.subtotal; });
     let ordBars = 0, ordLen = 0;
     ord.forEach(r => { if (r.sel) r.sel.parts.forEach(q => { ordBars += q.count; ordLen += q.len * q.count; }); });
-    return { dims:dims, bom:bom, bomTotal:bomTotal, pl:pl, tn:tn, kt:kt, kl:kl, ord:ord, ordBars:ordBars, ordLen:ordLen, lensText:(o.lens || "8-16") };
+    return { dims:dims, bom:bom, bomTotal:bomTotal, pl:pl, tn:tn, kt:kt, kl:kl, kw:kw, ord:ord, ordBars:ordBars, ordLen:ordLen, lensText:(o.lens || "8-16") };
   }
   function plateGroupText(dims){
     const on = plateSiteList(dims).filter(x => x.on);
@@ -3905,7 +3914,7 @@
     // 噸數
     h += "<h4 class='detail-section-title'>可放噸數</h4>";
     h += tn.ratio > 0
-      ? "<p style='font-size:13.5px;line-height:1.7;margin:4px 0 0;'>換算基準：已知 " + fmt(e.kt) + " 噸 ÷ 全長合計 " + fmt(e.kl) + " m ＝ " + fmt(tn.ratio) + " 噸／m。本專案全長 " + fmt(e.dims.railLen) + " m → 可放約 <b>" + fmt(tn.capacityPerCurrentSet) + " 噸</b>。<br><span style='color:var(--ink-soft);font-size:12px;'>（簡化比例推算，僅供初步規劃，不是結構計算。）</span></p>"
+      ? "<p style='font-size:13.5px;line-height:1.7;margin:4px 0 0;'>換算基準：已知 " + fmt(e.kt) + " 噸 ÷ 全長合計 " + fmt(e.kl) + " m ＝ " + fmt(tn.baseRatio) + " 噸／m（寬 " + fmt(e.kw) + " m）" + (tn.knownWid > 0 ? "；本專案寬度 " + fmt(e.dims.tieLen) + " m，寬度係數 ×" + fmt(tn.widFactor) + " ＝ " + fmt(tn.ratio) + " 噸／m" : "") + "。本專案全長 " + fmt(e.dims.railLen) + " m → 可放約 <b>" + fmt(tn.capacityPerCurrentSet) + " 噸</b>。<br><span style='color:var(--ink-soft);font-size:12px;'>（簡化比例推算，僅供初步規劃，不是結構計算。）</span></p>"
       : "<p class='callout'>尚未設定噸位換算基準（③已知總噸數與全長合計）。</p>";
     h += "<h4 class='detail-section-title'>型鋼需求明細（BOM）</h4>" + buildDetailBOMTable(e.bom);
     return h;
@@ -3981,7 +3990,7 @@
         ["全長(m)", e.dims.railLen], ["寬度(m)", e.dims.tieLen], ["立柱支數", e.dims.colCount], ["立柱高度(m)", e.dims.colLen], ["斜撐單長(m)", e.dims.braceLen],
         [], ["型鋼需求總長(m)", +e.bomTotal.toFixed(2)], ["叫貨支數", e.ordBars], ["叫貨總長(m)", e.ordLen / 100],
         ["鐵板片數", pl.pieces], ["標準板張數", pl.sheets], ["鐵板叫料(kg)", +pl.buyKg.toFixed(1)],
-        ["可放噸數(噸)", +tn.capacityPerCurrentSet.toFixed(2)], ["換算基準(噸/m)", +tn.ratio.toFixed(3)]];
+        ["可放噸數(噸)", +tn.capacityPerCurrentSet.toFixed(2)], ["換算基準(噸/m)", +tn.baseRatio.toFixed(3)], ["寬度係數(本案寬÷已知寬)", +tn.widFactor.toFixed(3)]];
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), "專案摘要");
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaBOM(e.bom)), "型鋼需求明細BOM");
       const ordRows = [["規格","需求(m)","採用方案","叫貨組合","支數","叫貨總長(m)","餘料(m)","利用率"]];
