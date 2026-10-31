@@ -37,6 +37,7 @@
     --sill:#c9962e;
     --reinforce:#b23a2c;
     --brace:#4fa8c9;
+    --plate:#e5629a;
   }
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
@@ -120,7 +121,7 @@
     gap:20px;
     align-items:start;
   }
-  @media (max-width:900px){ .grid{grid-template-columns:1fr;} }
+  @media (max-width:900px){ .grid{grid-template-columns:minmax(0,1fr);} .grid > *{min-width:0;} .cgrid{grid-template-columns:repeat(2,minmax(0,1fr));} .field input{min-width:0;max-width:100%;} }
 
   .side{
     position:sticky;top:20px;
@@ -225,16 +226,55 @@
      popping into place instantly. Animating the GROUP's opacity/transform
      (not the individual shapes) keeps each shape's own fill/opacity rules
      (e.g. .beam-highlight's .55 opacity) intact once it's fully faded in. */
-  .step-group{
-    animation: assemblyIn .5s cubic-bezier(.2,.7,.3,1) both;
-    animation-delay: calc(var(--step, 0) * 80ms);
-    transform-box: fill-box;
-    transform-origin: center;
-  }
-  @keyframes assemblyIn{
-    from{ opacity:0; transform:translateY(-8px) scale(.92); }
-    to{ opacity:1; transform:translateY(0) scale(1); }
-  }
+  /* ---- assembly animation: each build step is a <g class="step-group k-KIND">
+     whose children (<g class="item">) animate in with their own motion:
+     rails slide out, ties drop in, plates drop+bounce, posts grow up, braces pop.
+     Steps are revealed by adding .shown (see stageApply in the script). ---- */
+  .step-group .item{transform-box:fill-box;transition:opacity .4s ease, transform .65s cubic-bezier(.2,.8,.25,1);transition-delay:calc(var(--i,0) * 90ms);}
+  .k-rail .item{transform-origin:0% 100%;}
+  .k-post .item,.k-brace .item{transform-origin:50% 100%;}
+  .k-plate .item{transition:opacity .3s ease, transform .75s cubic-bezier(.34,1.56,.64,1);transition-delay:calc(var(--i,0) * 70ms);}
+  .iso:not(.static) .step-group:not(.shown) .item{opacity:0;transition-delay:0s;transition-duration:.2s;}
+  .iso:not(.static) .k-rail:not(.shown) .item{transform:scaleX(.02);}
+  .iso:not(.static) .k-tie:not(.shown) .item,.iso:not(.static) .k-reinforce:not(.shown) .item{transform:translateY(-32px);}
+  .iso:not(.static) .k-plate:not(.shown) .item{transform:translateY(-46px) scale(1.2);}
+  .iso:not(.static) .k-post:not(.shown) .item{transform:scaleY(.02);}
+  .iso:not(.static) .k-brace:not(.shown) .item{transform:scale(.3);}
+  .iso.noanim .item{transition:none !important;}
+  .item.pop{animation:plateDrop .65s cubic-bezier(.34,1.56,.64,1) both;}
+  @keyframes plateDrop{ from{opacity:0;transform:translateY(-34px) scale(1.25);} to{opacity:1;transform:none;} }
+  .plate-top{fill:var(--plate);stroke:color-mix(in srgb, var(--plate) 55%, black);stroke-width:1;stroke-linejoin:round;}
+  .plate-side{fill:color-mix(in srgb, var(--plate) 55%, black);}
+  .plate-hit{fill:transparent;stroke:none;cursor:pointer;}
+  .iso.edit:not(.playing) .plate-hit:not(.on){stroke:var(--plate);stroke-width:1.3;stroke-dasharray:3 2;fill:color-mix(in srgb, var(--plate) 14%, transparent);}
+  .iso.edit .plate-hit:hover{stroke:var(--ink);stroke-width:1.6;stroke-dasharray:none;fill:color-mix(in srgb, var(--plate) 32%, transparent);}
+  .side svg.iso,.stg-zoom svg.iso{width:100%;}
+  .stg-ctl{margin-top:8px;font-size:12px;}
+  .stg-row{display:flex;gap:6px;align-items:center;}
+  .stg-row .stg-play{flex:1;}
+  .stg-row select{width:auto;padding:3px 6px;font-size:12px;}
+  .stg-range{width:100%;margin:8px 0 2px;accent-color:var(--accent);}
+  .stg-cap{color:var(--ink-soft);min-height:1.5em;}
+  .stg-plates{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);}
+  .stg-plates .stg-pl{font-weight:700;color:var(--plate);margin-right:2px;}
+  .stg-chip{border:1px solid var(--plate);background:transparent;color:var(--ink);border-radius:999px;padding:3px 9px;font-size:11.5px;cursor:pointer;font-family:inherit;}
+  .stg-chip.on{background:var(--plate);color:#fff;}
+  .stg-chip.part{background:color-mix(in srgb, var(--plate) 28%, transparent);}
+  .stg-note{color:var(--ink-soft);font-size:11px;margin-top:5px;line-height:1.55;}
+  .stg-zoom{position:fixed;inset:0;z-index:900;background:rgba(20,16,10,.6);display:flex;align-items:center;justify-content:center;padding:2vh 2vw;}
+  .stg-zoom[hidden]{display:none;}
+  .stg-zoom-box{background:var(--paper-raised);border-radius:14px;padding:14px;max-width:1200px;width:100%;max-height:96vh;overflow:auto;}
+  .stg-zoom-box .stg-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-weight:700;}
+  .projbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;background:var(--paper-raised);border:1px solid var(--line);border-radius:10px;padding:6px 12px;margin:0 0 10px;}
+  .projbar .pb-lab{font-size:12px;color:var(--ink-soft);}
+  .projbar select{width:auto;max-width:min(52vw,380px);padding:4px 8px;font-size:14px;font-weight:700;}
+  .projbar .pb-loc{font-size:12px;color:var(--ink-soft);}
+  .pb-state{font-size:12px;font-weight:700;}
+  .pb-state.ok{color:var(--good);} .pb-state.dirty{color:var(--warn);} .pb-state.draft{color:var(--ink-soft);}
+  .np-opt{display:flex;align-items:center;gap:8px;font-size:14px;margin:6px 0;cursor:pointer;}
+  .np-opt input[type=radio]{width:auto;flex:none;}
+  .np-opt select{width:auto;flex:1;min-width:0;}
+  .stg-card h2{display:flex;align-items:center;justify-content:space-between;gap:8px;}
   @media (prefers-reduced-motion: reduce){
     .step-group{ animation:none !important; opacity:1 !important; transform:none !important; }
   }
@@ -504,8 +544,124 @@
   .print-proj-head h2{margin:0 0 4px;font-family:"Big Shoulders Display",sans-serif;}
   .print-proj-head p{margin:0 0 2px;font-size:12.5px;color:var(--ink-soft);}
 
+
+  /* ===== compact UI (calc view) ===== */
+  .grid{grid-template-columns:344px 1fr;gap:16px;}
+  .side{top:10px;gap:10px;max-height:calc(100vh - 20px);overflow-y:auto;padding-right:2px;scrollbar-width:thin;}
+  .card{padding:12px 14px 14px;}
+  .card h2{font-size:15px;}
+  .field{margin-bottom:8px;}
+  .field label{font-size:11.5px;margin-bottom:3px;}
+  input[type="text"],input[type="number"]{padding:5px 8px;font-size:13px;}
+  .cgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;}
+  .cgrid .field{margin:0;}
+  .cgrid .full{grid-column:1/-1;}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+  .chk{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;padding:4px 11px;border:1px solid var(--line-strong);border-radius:999px;background:var(--paper);cursor:pointer;user-select:none;}
+  .chk input{margin:0;accent-color:var(--accent);}
+  .chk:has(input:checked){border-color:var(--accent);background:var(--paper-raised);font-weight:600;}
+  details.cdet{background:var(--paper-raised);border:1px solid var(--line);border-radius:12px;padding:0;}
+  details.cdet > summary{cursor:pointer;list-style:none;padding:10px 14px;font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px;}
+  details.cdet > summary::-webkit-details-marker{display:none;}
+  details.cdet > summary::before{content:"▸";font-size:11px;color:var(--ink-soft);transition:transform .12s;}
+  details.cdet[open] > summary::before{transform:rotate(90deg);}
+  details.cdet > summary .hint{font-weight:400;font-size:11px;color:var(--ink-soft);}
+  details.cdet > .cbody{padding:0 14px 14px;}
+  .main{gap:12px;}
+  .tabbar{position:sticky;top:0;z-index:6;display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;background:var(--paper);border-bottom:1px solid var(--line);}
+  .tabbar button{padding:6px 12px;font-size:12.5px;border-radius:999px;}
+  .tabbar button.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);}
+  .strip{display:flex;flex-wrap:wrap;gap:8px;}
+  .strip .sk{flex:1 1 130px;background:var(--paper-raised);border:1px solid var(--line);border-radius:10px;padding:7px 11px;}
+  .strip .sk b{display:block;font-size:17px;font-family:"IBM Plex Mono",monospace;color:var(--ink);}
+  .strip .sk span{font-size:11px;color:var(--ink-soft);}
+  .tab-off{display:none !important;}
+  #view-calc .main .section-sub{display:none;}
+  #view-calc .main .section-title{font-size:20px;margin-bottom:8px;}
+  .calc-on .top .lede{display:none;}
+  .calc-on .top h1{font-size:clamp(20px,2.4vw,26px);margin-bottom:4px;}
+  .calc-on .top{padding-bottom:8px;margin-bottom:8px;}
+  th,td{padding:7px 10px;}
+  .ord-table tr.ord-extra{display:none;}
+  .show-all .ord-table tr.ord-extra{display:table-row;}
+  .ord-more{margin:6px 0 2px;}
+  #view-calc .invcollapse .tablewrap{max-height:62vh;overflow:auto;}
+  #view-calc .invcollapse .inv-table thead th{position:sticky;top:0;z-index:2;}
+  @media (max-width:900px){ .grid{grid-template-columns:1fr;} .side{max-height:none;overflow:visible;position:static;} }
+
+
+  /* ===== one-screen dashboard (desktop) ===== */
+  .calc-on .top{display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px;padding-bottom:6px;margin-bottom:8px;}
+  .calc-on .top .eyebrow{display:none;}
+  .calc-on .top h1{margin:0;font-size:clamp(18px,2vw,24px);}
+  .calc-on .top .toolbar-export{margin:0 0 0 auto;}
+  #view-calc .main table{min-width:0;font-size:12.5px;}
+  #view-calc .main th, #view-calc .main td{padding:6px 8px;}
+  #view-calc .main section[data-print-section] .tablewrap{border-radius:8px;}
+  #view-calc .kpis{grid-template-columns:repeat(2,1fr);gap:6px;}
+  #view-calc .kpi{padding:5px 10px;border-radius:8px;}
+  #view-calc .kpi .v{font-size:17px;}
+  #view-calc .kpi .l{font-size:10.5px;margin-top:1px;}
+  #view-calc #tonnage-kpi-host{grid-template-columns:repeat(4,1fr);}
+  #bom-table th,#bom-table td{white-space:normal;padding:5px 6px;}
+  #match-table th,#match-table td{padding:5px 6px;}
+  #view-calc .strip .sk{padding:5px 10px;}
+  #view-calc .strip .sk b{font-size:15px;}
+  #view-calc section[data-print-section="s03"] .callout{display:none;}
+  #view-calc section[data-print-section="s06o"]{display:flex;flex-direction:column;}
+  #view-calc section[data-print-section="s06o"] #ord-summary{order:2;}
+  #view-calc section[data-print-section="s06o"] #ord-result{order:3;}
+  #plt-result .strip{margin-top:8px;}
+  #plt-result .sk{flex:1 1 28%;min-width:0;}
+  #plt-result .sk span{font-size:10.5px;}
+  #view-calc #kpi-host{grid-template-columns:repeat(4,1fr);}
+  #view-calc #kpi-host .kpi .v{font-size:15px;}
+  #bom-table th{white-space:nowrap;}
+  .calc-on #app-footer{display:none;}
+  #plt-result .sk b{font-size:15px;}
+  .tabbar .tl{align-self:center;font-size:12px;color:var(--ink-soft);margin-right:4px;}
+  @media (min-width:1100px){
+    #view-calc .main{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(380px,1fr);
+      grid-template-rows:auto auto auto auto 1fr auto auto;
+      grid-template-areas:"strip strip" "ord bom" "ord match" "ord plate" "ord ." "tabs tabs" "more more";
+      gap:10px 12px;align-items:start;}
+    #view-calc .main > .strip{grid-area:strip;}
+    #view-calc .main > .tabbar{grid-area:tabs;position:static;}
+    #view-calc .main > section[data-print-section]{background:var(--paper-raised);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-width:0;overflow:auto;}
+    #view-calc .main > section[data-print-section="s06o"]{grid-area:ord;max-height:calc(100vh - 150px);}
+    #view-calc .main > section[data-print-section="s02"]{grid-area:bom;}
+    #view-calc .main > section[data-print-section="s03"]{grid-area:match;max-height:230px;}
+    #view-calc .main > section[data-print-section="s06p"]{grid-area:plate;}
+    #view-calc .main > section[data-print-section="s01"],
+    #view-calc .main > section[data-print-section="s04"],
+    #view-calc .main > section[data-print-section="s05"],
+    #view-calc .main > section[data-print-section="s07"]{grid-area:more;}
+    #view-calc .main .section-title{font-size:16px;margin:0 0 6px;}
+    #view-calc .side{max-height:calc(100vh - 80px);}
+  }
+
+  .calc-on .wrap{max-width:1760px;padding-top:14px;padding-bottom:20px;}
+  #view-calc table.ord-table{min-width:0;width:100%;}
+  #view-calc .ord-table th,#view-calc .ord-table td{padding:4px 6px;font-size:12px;}
+  #view-calc .ord-table .ord-pills{display:inline-flex;flex-wrap:wrap;gap:3px;margin:0 0 0 4px;vertical-align:middle;}
+  #view-calc .ord-table .pill{font-size:10px;padding:1px 6px;white-space:nowrap;}
+  #view-calc .ord-table td.combo{white-space:normal;}
+  #view-calc .ord-table details summary{white-space:nowrap;}
+  #match-table th,#match-table td{white-space:normal;font-size:11.5px;padding:4px 5px;}
+  #view-calc .ord-table details div{white-space:normal;}
+  #view-calc #ord-summary .tablewrap{margin-bottom:4px;}
+  @media (min-width:1100px){
+    #view-calc .main > section[data-print-section="s06o"]{max-height:calc(100vh - 96px);}
+    #view-calc .side{max-height:calc(100vh - 70px);}
+  }
   @media print{
-    .side, .toolbar-export, .invtoolbar, #fatal-banner, .modal-overlay, .lightbox-overlay, #shared-db-panel{display:none !important;}
+    .stg-zoom{display:none !important;}
+    .item{opacity:1 !important;transform:none !important;transition:none !important;}
+    #view-calc .main{display:block !important;}
+    #view-calc .main > section[data-print-section]{max-height:none !important;overflow:visible !important;}
+    #view-calc .main > section.tab-off{display:block !important;}
+    .tabbar, .strip{display:none !important;}
+    .projbar, .side, .toolbar-export, .invtoolbar, #fatal-banner, .modal-overlay, .lightbox-overlay, #shared-db-panel{display:none !important;}
     .grid{grid-template-columns:1fr !important;}
     .inv-table th:last-child, .inv-table td:last-child{display:none !important;}
     body{background:#fff;}
@@ -521,6 +677,7 @@
      script below fails to parse (e.g. an older browser that chokes on modern
      JS syntax). Converts a silent blank page into a visible diagnostic. -->
 <div id="fatal-banner"></div>
+<div class="stg-zoom" id="stage-zoom" hidden><div class="stg-zoom-box"><div class="stg-top"><span>組立預覽（可點方塊增減加強板）</span><button type="button" class="small" id="btn-stg-zoomx">關閉 ✕</button></div><div id="stage-host-zoom"></div></div></div>
 <script>
   window.onerror = function(msg, src, line, col, err){
     var el = document.getElementById("fatal-banner");
@@ -556,10 +713,16 @@
   <div class="view-home" id="view-home">
     <p class="landing-intro">選擇下面其中一項開始：進行型鋼配料試算、查看／比較過去存過的專案，或瀏覽各專案的實際組立照片。</p>
     <div class="landing-grid">
+      <button type="button" class="landing-card" id="landing-new">
+        <span class="lc-icon">＋</span>
+        <span class="lc-title">新增專案</span>
+        <span class="lc-desc">替新的檔樁／機台區開一個全新專案（空白、複製目前設定或複製既有專案），資料各自獨立，不會蓋掉舊專案。</span>
+      </button>
       <button type="button" class="landing-card" data-view="calc">
         <span class="lc-icon">🧮</span>
-        <span class="lc-title">開始計算</span>
+        <span class="lc-title">繼續計算</span>
         <span class="lc-desc">輸入檔樁尺寸與庫存，自動算出型鋼需求明細、供需比對與可配組數。</span>
+        <span class="lc-count" id="landing-current"></span>
       </button>
       <button type="button" class="landing-card" data-view="projects">
         <span class="lc-icon">🗂️</span>
@@ -576,94 +739,61 @@
     </div>
   </div>
 
+  <div class="projbar" id="projbar" hidden>
+    <span class="pb-lab">目前專案</span>
+    <select id="pb-select" title="切換專案"></select>
+    <span class="pb-loc" id="pb-loc"></span>
+    <span class="pb-state" id="pb-state"></span>
+    <span class="spacer"></span>
+    <button type="button" class="primary small" id="pb-new">＋ 新增專案</button>
+    <button type="button" class="small" id="pb-save" title="Ctrl+S">儲存</button>
+    <button type="button" class="small" id="pb-saveas">另存新專案</button>
+    <button type="button" class="small" id="pb-rename">改名／地點</button>
+  </div>
+
   <div class="grid" id="view-calc" hidden>
     <aside class="side">
       <div class="card">
-        <h2>① 檔樁尺寸需求</h2>
-        <p class="cardnote">決定支數與單長的幾何輸入</p>
-        <div class="field">
-          <label for="in-railLen">全長（兩側地枕貫穿全長）<span class="unit">m</span></label>
-          <input type="number" id="in-railLen" value="16" min="1" step="0.5">
+        <h2>① 檔樁尺寸</h2>
+        <div class="cgrid" style="margin-top:8px;">
+          <div class="field"><label for="in-railLen">全長（兩側地枕）<span class="unit">m</span></label><input type="number" id="in-railLen" value="16" min="1" step="0.5"></div>
+          <div class="field"><label for="in-tieLen">寬度（地枕寬）<span class="unit">m</span></label><input type="number" id="in-tieLen" value="8" min="1" step="0.5"></div>
+          <div class="field"><label for="in-colCount">立柱支數（偶數）</label><input type="number" id="in-colCount" value="8" min="2" step="2"></div>
+          <div class="field"><label for="in-colLen">立柱高度<span class="unit">m</span></label><input type="number" id="in-colLen" value="5" min="0.5" step="0.5"></div>
+          <div class="field"><label for="in-braceLen">斜撐單長<span class="unit">m</span></label><input type="number" id="in-braceLen" value="2" min="0.5" step="0.5"></div>
+          <div class="field"><label for="in-purchaseLen">標準採購長<span class="unit">m／支</span></label><input type="number" id="in-purchaseLen" value="12" min="1" step="0.5"></div>
         </div>
-        <div class="field">
-          <label for="in-tieLen">寬度（每節地枕寬）<span class="unit">m</span></label>
-          <input type="number" id="in-tieLen" value="8" min="1" step="0.5">
-        </div>
-        <div class="field row2">
-          <div>
-            <label for="in-colCount">立柱支數（偶數）</label>
-            <input type="number" id="in-colCount" value="8" min="2" step="2">
-          </div>
-          <div>
-            <label for="in-colLen">立柱高度<span class="unit">m</span></label>
-            <input type="number" id="in-colLen" value="5" min="0.5" step="0.5">
-          </div>
-        </div>
-        <div class="field">
-          <label for="in-braceLen">斜撐單長（上1＋下1示意）<span class="unit">m</span></label>
-          <input type="number" id="in-braceLen" value="2" min="0.5" step="0.5">
-        </div>
-        <div class="switch-row">
-          <span>含中間補強地枕</span>
-          <label class="switch">
-            <input type="checkbox" id="in-hasReinforce" checked>
-            <span class="track"></span><span class="knob"></span>
-          </label>
-        </div>
-        <div class="switch-row">
-          <span>含斜撐</span>
-          <label class="switch">
-            <input type="checkbox" id="in-hasBrace" checked>
-            <span class="track"></span><span class="knob"></span>
-          </label>
-        </div>
-        <div class="field" style="margin-top:10px;">
-          <label for="in-purchaseLen">標準採購型鋼長<span class="unit">m／支</span></label>
-          <input type="number" id="in-purchaseLen" value="12" min="1" step="0.5">
+        <div class="chips">
+          <label class="chk"><input type="checkbox" id="in-hasReinforce" checked>含中間補強地枕</label>
+          <label class="chk"><input type="checkbox" id="in-hasBrace" checked>含斜撐</label>
         </div>
       </div>
 
-      <div class="card">
-        <h2>② 各構件規格指定</h2>
-        <p class="cardnote">同規格才會互相扣抵庫存；兩側地枕可填多組規格，用逗號分隔</p>
-        <div class="field">
-          <label for="spec-col">立柱</label>
-          <input type="text" id="spec-col" value="400 x 400">
-        </div>
-        <div class="field">
-          <label for="spec-rail">兩側地枕</label>
-          <input type="text" id="spec-rail" value="428 x 407, 394 x 398">
-        </div>
-        <div class="field">
-          <label for="spec-tie">立柱地枕（主／中間地枕）</label>
-          <input type="text" id="spec-tie" value="400 x 400">
-        </div>
-        <div class="field">
-          <label for="spec-reinforce">中間補強地枕</label>
-          <input type="text" id="spec-reinforce" value="364 x 371">
-        </div>
-        <div class="field">
-          <label for="spec-brace">斜撐</label>
-          <input type="text" id="spec-brace" value="700 x 300">
-        </div>
+            <div class="card stg-card" id="stg-card">
+        <h2><span>組立預覽</span><button type="button" class="small" id="btn-stg-zoom">放大</button></h2>
+        <div id="stage-host-side"></div>
       </div>
+<details class="cdet">
+        <summary>② 各構件規格<span class="hint">（同規格才互相扣庫存）</span></summary>
+        <div class="cbody"><div class="cgrid">
+          <div class="field"><label for="spec-col">立柱</label><input type="text" id="spec-col" value="400 x 400"></div>
+          <div class="field"><label for="spec-tie">立柱地枕</label><input type="text" id="spec-tie" value="400 x 400"></div>
+          <div class="field full"><label for="spec-rail">兩側地枕（多組用逗號分隔）</label><input type="text" id="spec-rail" value="428 x 407, 394 x 398"></div>
+          <div class="field"><label for="spec-reinforce">中間補強地枕</label><input type="text" id="spec-reinforce" value="364 x 371"></div>
+          <div class="field"><label for="spec-brace">斜撐</label><input type="text" id="spec-brace" value="700 x 300"></div>
+        </div></div>
+      </details>
 
-      <div class="card">
-        <h2>③ 噸位換算基準</h2>
-        <p class="cardnote">容量假設與地枕「全長」成正比，用於下方「05 噸位快算」反推需要幾組／尺寸</p>
-        <div class="field row2">
-          <div>
-            <label for="in-knownTons">已知總噸數<span class="unit">公噸</span></label>
-            <input type="number" id="in-knownTons" value="10000" min="0" step="100">
+      <details class="cdet">
+        <summary>③ 噸位換算基準<span class="hint">（供「05 噸位」用）</span></summary>
+        <div class="cbody">
+          <div class="cgrid">
+            <div class="field"><label for="in-knownTons">已知總噸數<span class="unit">公噸</span></label><input type="number" id="in-knownTons" value="10000" min="0" step="100"></div>
+            <div class="field"><label for="in-knownLen">已知全長合計<span class="unit">m</span></label><input type="number" id="in-knownLen" value="76" min="1" step="0.5"></div>
           </div>
-          <div>
-            <label for="in-knownLen">已知全長合計<span class="unit">m</span></label>
-            <input type="number" id="in-knownLen" value="76" min="1" step="0.5">
-          </div>
+          <p class="cardnote" id="tonnage-ratio-note" style="margin:6px 0 0;">—</p>
         </div>
-        <p class="cardnote" id="tonnage-ratio-note" style="margin:6px 0 0;">—</p>
-        <p class="cardnote" style="margin:4px 0 0;">預設值＝目前5組全長合計（維修區16＋304K區1號14＋304K區2號14＋1號台車16＋3號台車16＝76m）約可放1萬公噸，可依實際狀況調整。</p>
-      </div>
+      </details>
 
       <div class="btnbar">
         <button class="primary" id="btn-demo" type="button">套用維修區範例</button>
@@ -674,7 +804,7 @@
     <main class="main">
       <section data-print-section="s01" data-print-label="01 3D組立預覽">
         <h2 class="section-title"><span class="idx">01</span>3D組立預覽</h2>
-        <p class="section-sub">依左側尺寸即時繪製動畫組立過程，兩端立柱對齊地枕端點、中間補強地枕落在相鄰兩節正中間</p>
+        <p class="section-sub">依左側尺寸繪製組立示意圖（含加強板位置），兩端立柱對齊地枕端點、中間補強地枕落在相鄰兩節正中間</p>
         <div class="stagecard"><div id="stage-host"></div></div>
         <div class="legend">
           <span><span class="dot" style="background:var(--post)"></span>立柱</span>
@@ -682,7 +812,7 @@
           <span><span class="dot" style="background:var(--sill)"></span>立柱地枕</span>
           <span><span class="dot" style="background:var(--reinforce)"></span>中間補強地枕</span>
           <span><span class="dot" style="background:var(--brace)"></span>斜撐</span>
-          <button type="button" class="small stage-replay-btn" id="btn-replay-stage">▶ 重播組立動畫</button>
+          <span><span class="dot" style="background:var(--plate)"></span>加強板</span>
         </div>
       </section>
 
@@ -746,14 +876,15 @@
         <h2 class="section-title"><span class="idx">06</span>型鋼叫貨計算</h2>
         <p class="section-sub">把需求拆成「每一段要切多長」，再用可叫貨的長度（例如 8～16M）算出叫貨組合與餘料——會實際排切割（一支料可以切出哪幾段），不是只拿總長去除。每個規格各算一組，可以自己選要採用哪個方案。</p>
         <div class="card">
-          <div class="field" style="max-width:420px;">
-            <label for="ord-lens">可叫貨的型鋼長度<span class="unit">m</span></label>
-            <input type="text" id="ord-lens" value="8-16" placeholder="例如 8-16 或 14,15,16" autocomplete="off">
-            <p class="cardnote" style="margin:4px 0 0;">範圍寫「8-16」（每1M一種），或用逗號分隔「14,15,16」，也可以混用「8-12,14,16」。</p>
-          </div>
-          <div class="ord-src">
-            <label><input type="radio" name="ord-src" id="ord-src-bom" value="bom"> 帶入上方「02 型鋼需求明細」（依規格分組）</label>
-            <label><input type="radio" name="ord-src" id="ord-src-manual" value="manual"> 手動輸入需求</label>
+          <div style="display:flex;flex-wrap:wrap;gap:8px 18px;align-items:flex-end;">
+            <div class="field" style="width:230px;margin:0;">
+              <label for="ord-lens">可叫貨長度 m<span class="unit">（8-16、14,15,16）</span></label>
+              <input type="text" id="ord-lens" value="8-16" placeholder="例如 8-16 或 14,15,16" autocomplete="off">
+            </div>
+            <div class="ord-src" style="margin:0;">
+              <label><input type="radio" name="ord-src" id="ord-src-bom" value="bom"> 帶入「需求明細」</label>
+              <label><input type="radio" name="ord-src" id="ord-src-manual" value="manual"> 手動輸入需求</label>
+            </div>
           </div>
           <div id="ord-manual" hidden>
             <div class="tablewrap" style="margin-top:8px;">
@@ -771,6 +902,29 @@
         </div>
         <div id="ord-result"></div>
         <div id="ord-summary"></div>
+      </section>
+
+      <section data-print-section="s06p" data-print-label="06 之2 鐵板（加強板）計算">
+        <h2 class="section-title"><span class="idx">06+</span>鐵板（加強板）計算</h2>
+        <p class="section-sub">加強板（例如 1M×1M）：算出片數、單片重、整張標準鋼板要叫幾張，以及重量與金額。放在哪些位置，請在左側「組立預覽」圖上點選（預設為每支立柱底座）；「位置數」留空就自動等於選取的位置數。</p>
+        <details class="cdet" id="plt-details" style="margin-bottom:0;">
+          <summary>規格設定<span class="hint" id="plt-hint"></span></summary>
+          <div class="cbody">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:2px 10px;">
+            <div class="field"><label for="plt-len">加強板長<span class="unit">m</span></label><input type="number" id="plt-len" min="0.1" step="0.1"></div>
+            <div class="field"><label for="plt-wid">加強板寬<span class="unit">m</span></label><input type="number" id="plt-wid" min="0.1" step="0.1"></div>
+            <div class="field"><label for="plt-thk">板厚<span class="unit">mm</span></label><input type="number" id="plt-thk" min="1" step="1"></div>
+            <div class="field"><label for="plt-per">每處片數<span class="unit">片</span></label><input type="number" id="plt-per" min="1" step="1"></div>
+            <div class="field"><label for="plt-pos">加強板位置數<span class="unit">處（留空＝立柱數）</span></label><input type="number" id="plt-pos" min="0" step="1" placeholder="自動"></div>
+            <div class="field"><label for="plt-slen">標準鋼板長<span class="unit">m</span></label><input type="number" id="plt-slen" min="0.1" step="0.5"></div>
+            <div class="field"><label for="plt-swid">標準鋼板寬<span class="unit">m</span></label><input type="number" id="plt-swid" min="0.1" step="0.1"></div>
+            <div class="field"><label for="plt-pn">正常品單價<span class="unit">元/kg</span></label><input type="number" id="plt-pn" min="0" step="0.5"></div>
+            <div class="field"><label for="plt-ps">廢棄品單價<span class="unit">元/kg</span></label><input type="number" id="plt-ps" min="0" step="0.5"></div>
+          </div>
+          <p class="cardnote" style="margin:2px 0 0;">預設＝原報告鋼板 1M×10M×20mm，單價同型鋼；密度 7,850 kg/m³。</p>
+          </div>
+        </details>
+        <div id="plt-result"></div>
       </section>
 
       <section data-print-section="s07" data-print-label="07 庫存清單管理">
@@ -890,6 +1044,37 @@
     <p id="footer-storage-note">「歷史專案」：存檔會把當下①②③的輸入與試算結果快照（含地點與組立照片）存進這台電腦的瀏覽器（localStorage），重新整理頁面後仍會保留；清除瀏覽器資料或換電腦、換瀏覽器則會遺失，請用「匯出專案檔」定期備份或跨電腦分享。載入專案只會覆蓋①②③的設定，不會更動庫存清單。</p>
   </footer>
 
+  <div class="modal-overlay" id="np-overlay" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="np-title">
+      <button type="button" class="modal-close-x" id="np-x" aria-label="關閉">✕</button>
+      <h3 id="np-title">新增專案</h3>
+      <p class="modal-sub">每個專案各自保存尺寸、叫貨與加強板設定，不會互相覆蓋。庫存清單是共用的。</p>
+      <div class="field"><label for="np-name">專案名稱</label><input type="text" id="np-name" placeholder="例如：304機台區 座3" autocomplete="off"></div>
+      <div class="field"><label for="np-loc">地點（可留空）</label><input type="text" id="np-loc" list="np-loc-list" placeholder="例如：304K區" autocomplete="off"><datalist id="np-loc-list"></datalist></div>
+      <div class="field">
+        <label>起始內容</label>
+        <label class="np-opt"><input type="radio" name="np-tpl" value="blank" checked> 空白（預設尺寸，從頭填）</label>
+        <label class="np-opt"><input type="radio" name="np-tpl" value="current"> 複製目前畫面的設定</label>
+        <label class="np-opt"><input type="radio" name="np-tpl" value="copy"> 複製既有專案：<select id="np-copy"></select></label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="ghost" id="np-cancel">取消</button>
+        <button type="button" class="primary" id="np-ok">建立並開始</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal-overlay" id="dg-overlay" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <h3>有尚未儲存的變更</h3>
+      <p class="modal-sub" id="dg-msg"></p>
+      <div class="modal-actions">
+        <button type="button" class="ghost" id="dg-cancel">取消</button>
+        <button type="button" class="ghost" id="dg-discard">不儲存，直接繼續</button>
+        <button type="button" class="primary" id="dg-save">儲存並繼續</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="print-modal-overlay" hidden>
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="print-modal-title">
       <button type="button" class="modal-close-x" id="btn-print-close-x" aria-label="關閉">✕</button>
@@ -941,6 +1126,8 @@
   };
 
   let inventory = []; // {spec, length, qty, notUse, subFor, note}
+  let currentProjectId = null, savedSig = "", pendingCurrent = null;
+  const CUR_KEY = "steelCalcCurrent_v1";
   let seq = 0;
   function withId(row){ return Object.assign({ _id: "r" + (seq++) }, row); }
 
@@ -990,10 +1177,32 @@
     labelWithBg(svg,(p1.x+p2.x)/2,(p1.y+p2.y)/2,label);
   }
 
-  function renderStage(dims, hostOverride){
-    const numPositions = Math.max(1, Math.round(dims.colCount/2));
-    const positions=[]; const step = numPositions>1 ? dims.railLen/(numPositions-1) : 0;
-    for (let i=0;i<numPositions;i++) positions.push(numPositions>1 ? step*i : dims.railLen/2);
+  // ---- 加強板可選位置：立柱底座(預設有)、補強地枕兩端、地枕中央 ----
+  const SITE_GROUPS = [["base","立柱底座"],["mid","補強地枕兩端"],["ctr","地枕中央"]];
+  function stagePositions(dims){
+    const n = Math.max(1, Math.round(dims.colCount/2));
+    const step = n>1 ? dims.railLen/(n-1) : 0;
+    const xs = [];
+    for (let i=0;i<n;i++) xs.push(n>1 ? step*i : dims.railLen/2);
+    return xs;
+  }
+  function plateSiteList(dims){
+    const xs = stagePositions(dims), list = [];
+    const ov = (dims.plate && dims.plate.sites) || {};
+    xs.forEach((x,i) => { [0,1].forEach(sd => list.push({ key:"b"+i+(sd?"r":"f"), grp:"base", x:x, y: sd?dims.tieLen:0, def:true })); });
+    if (dims.hasReinforce) for (let i=0;i<xs.length-1;i++){
+      const rx = (xs[i]+xs[i+1])/2;
+      [0,1].forEach(sd => list.push({ key:"m"+i+(sd?"r":"f"), grp:"mid", x:rx, y: sd?dims.tieLen:0, def:false }));
+    }
+    xs.forEach((x,i) => list.push({ key:"c"+i, grp:"ctr", x:x, y:dims.tieLen/2, def:false }));
+    list.forEach(st => { st.on = ov[st.key] === undefined ? st.def : !!ov[st.key]; });
+    return list;
+  }
+
+  function renderStage(dims, hostOverride, opts){
+    opts = opts || {};
+    const interactive = !!opts.interactive;
+    const positions = stagePositions(dims);
 
     const maxRun = dims.railLen*LEN_PX*COS_A + dims.tieLen*WID_PX;
     const maxRise = dims.railLen*LEN_PX*SIN_A + COL_STUB;
@@ -1006,49 +1215,218 @@
 
     const host = hostOverride || document.getElementById("stage-host");
     host.innerHTML = "";
-    const svg = svgEl("svg",{viewBox:"0 0 "+svgW.toFixed(0)+" "+svgH.toFixed(0),width:svgW.toFixed(0),height:svgH.toFixed(0),class:"iso"});
+    const svg = svgEl("svg",{viewBox:"0 0 "+svgW.toFixed(0)+" "+svgH.toFixed(0),width:svgW.toFixed(0),height:svgH.toFixed(0),class:"iso"+(interactive?" edit":" static")});
     const rig = svgEl("g",{class:"rig"}); svg.appendChild(rig); host.appendChild(svg);
 
-    // Build up in construction order — both side rails first, then each tie
-    // beam, each reinforce tie, then each post/brace position — one <g
-    // class="step-group"> per stage so CSS can stagger them in as a simple
-    // "erection sequence" animation (see .step-group / @keyframes assemblyIn).
-    let buildStep = 0;
-    function stepGroup(){ return svgEl("g", { class:"step-group", style:"--step:"+buildStep+";" }); }
+    // one <g class="step-group k-KIND"> per build step; children are .item groups
+    // that animate individually (see CSS). Order = z-order = construction order.
+    const steps = [];
+    function mkStep(kind, label){
+      const g = svgEl("g",{ class:"step-group k-"+kind });
+      rig.appendChild(g); steps.push({ g:g, kind:kind, label:label }); return g;
+    }
+    function item(g, i, extraCls){ const it = svgEl("g",{ class:"item"+(extraCls?" "+extraCls:""), style:"--i:"+i }); g.appendChild(it); return it; }
+    function poly(parent, pts, cls){
+      parent.appendChild(svgEl("polygon",{ points: pts.map(p => p.x.toFixed(1)+","+p.y.toFixed(1)).join(" "), class:cls }));
+    }
 
-    const gRails = stepGroup();
-    beam(gRails, pt(0,0,0), pt(dims.railLen,0,0), THICK.rail, "beam-rail");
-    beam(gRails, pt(0,dims.tieLen,0), pt(dims.railLen,dims.tieLen,0), THICK.rail, "beam-rail");
-    rig.appendChild(gRails); buildStep++;
+    const gRails = mkStep("rail","兩側地枕 ×2");
+    beam(item(gRails,0), pt(0,0,0), pt(dims.railLen,0,0), THICK.rail, "beam-rail");
+    beam(item(gRails,1), pt(0,dims.tieLen,0), pt(dims.railLen,dims.tieLen,0), THICK.rail, "beam-rail");
 
-    positions.forEach(x => {
-      const g = stepGroup();
-      beam(g, pt(x,0,0), pt(x,dims.tieLen,0), THICK.tie, "beam-tie");
-      rig.appendChild(g); buildStep++;
-    });
-    if (dims.hasReinforce){
+    const gTies = mkStep("tie","立柱地枕 ×"+positions.length);
+    positions.forEach((x,i) => beam(item(gTies,i), pt(x,0,0), pt(x,dims.tieLen,0), THICK.tie, "beam-tie"));
+
+    if (dims.hasReinforce && positions.length>1){
+      const gR = mkStep("reinforce","中間補強地枕 ×"+(positions.length-1));
       for (let i=0;i<positions.length-1;i++){
         const rx=(positions[i]+positions[i+1])/2;
-        const g = stepGroup();
-        beam(g, pt(rx,0,0), pt(rx,dims.tieLen,0), THICK.reinforce, "beam-reinforce");
-        rig.appendChild(g); buildStep++;
+        beam(item(gR,i), pt(rx,0,0), pt(rx,dims.tieLen,0), THICK.reinforce, "beam-reinforce");
       }
     }
-    positions.forEach(x => {
-      const g = stepGroup();
-      [0, dims.tieLen].forEach((y, yi) => {
-        const isBack = yi===1;
-        const base = pt(x,y,0), top = pt(x,y,COL_STUB);
-        beam(g, base, top, THICK.post, "beam-post");
-        if (dims.hasBrace) braceTriangle(g, pt, x, y, isBack);
-        g.appendChild(svgEl("circle",{cx:base.x.toFixed(1),cy:base.y.toFixed(1),r:"3.4",class:"joint"}));
+
+    // 加強板（粉紅）：平放在地枕上，立柱坐在板上
+    const pl = dims.plate;
+    const sites = pl ? plateSiteList(dims) : [];
+    const onSites = sites.filter(st => st.on);
+    function footprint(st){
+      const hl=pl.len/2, hw=pl.wid/2;
+      return [pt(st.x-hl,st.y-hw,0), pt(st.x+hl,st.y-hw,0), pt(st.x+hl,st.y+hw,0), pt(st.x-hl,st.y+hw,0)];
+    }
+    if (pl && pl.len>0 && pl.wid>0 && onSites.length){
+      const gP = mkStep("plate","加強板 ×"+onSites.length);
+      onSites.forEach((st,i) => {
+        const it = item(gP, i, opts.pop === st.key ? "pop" : "");
+        const c = footprint(st);
+        poly(it, c.map(p => ({x:p.x, y:p.y+4})), "plate-side");
+        poly(it, c, "plate-top");
       });
-      rig.appendChild(g); buildStep++;
+    }
+
+    const gPost = mkStep("post","立柱 ×"+(positions.length*2));
+    positions.forEach((x,i) => {
+      const it = item(gPost,i);
+      [0, dims.tieLen].forEach(y => {
+        const base = pt(x,y,0), top = pt(x,y,COL_STUB);
+        beam(it, base, top, THICK.post, "beam-post");
+        it.appendChild(svgEl("circle",{cx:base.x.toFixed(1),cy:base.y.toFixed(1),r:"3.4",class:"joint"}));
+      });
     });
+    if (dims.hasBrace){
+      const gB = mkStep("brace","斜撐 ×"+(positions.length*2));
+      positions.forEach((x,i) => [0,1].forEach(yi => {
+        braceTriangle(item(gB, i*2+yi), pt, x, yi?dims.tieLen:0, yi===1);
+      }));
+    }
+
     dimLine(svg, pt(0,-DIM_OFFSET_M,0), pt(dims.railLen,-DIM_OFFSET_M,0), "全長 "+dims.railLen+"m");
     dimLine(svg, pt(-DIM_OFFSET_M,0,0), pt(-DIM_OFFSET_M,dims.tieLen,0), "寬 "+dims.tieLen+"m");
-    labelWithBg(svg, 6, 16, "立柱 "+dims.colLen+"m", "dim-text-soft", "start");
-    if (dims.hasBrace) labelWithBg(svg, 6, 34, "斜撐 "+dims.braceLen+"m（上1＋下1）", "dim-text-soft", "start");
+    let ly = 16;
+    labelWithBg(svg, 6, ly, "立柱 "+dims.colLen+"m", "dim-text-soft", "start"); ly += 18;
+    if (dims.hasBrace){ labelWithBg(svg, 6, ly, "斜撐 "+dims.braceLen+"m（上1＋下1）", "dim-text-soft", "start"); ly += 18; }
+    if (pl && onSites.length) labelWithBg(svg, 6, ly, "加強板 "+onSites.length+" 片（"+pl.len+"×"+pl.wid+"m）", "dim-text-soft", "start");
+
+    // 可點選的位置（只在互動版）：粉紅虛線＝可加入，點一下加入／移除
+    if (interactive && pl && pl.len>0 && pl.wid>0){
+      const gH = svgEl("g",{class:"plate-hints"});
+      sites.forEach(st => {
+        const e = svgEl("polygon",{ points: footprint(st).map(p => p.x.toFixed(1)+","+p.y.toFixed(1)).join(" "), class:"plate-hit"+(st.on?" on":"") });
+        const t = svgEl("title"); t.textContent = (SITE_GROUPS.find(g => g[0]===st.grp)||[])[1] + (st.on ? "（已加，點一下移除）" : "（點一下加入加強板）");
+        e.appendChild(t);
+        e.addEventListener("click", () => togglePlateSite(st.key));
+        gH.appendChild(e);
+      });
+      svg.appendChild(gH);
+    }
+    return { steps:steps, svg:svg, sites:sites };
+  }
+
+  // ---- 互動式預覽：播放／步驟／加強板位置 ----
+  const stageViews = [];
+  const stageState = { step:null, speed:900, timer:null, played:false, pop:null };
+
+  function stagePlateGroupToggle(grp){
+    const dims = readDims();
+    const list = plateSiteList(dims).filter(st => st.grp === grp);
+    const allOn = list.length && list.every(st => st.on);
+    const sites = Object.assign({}, platState.sites);
+    list.forEach(st => { sites[st.key] = !allOn; });
+    platState.sites = sites; platSave(); stageState.pop = null; stageStop(); stageState.step = null; recompute();
+  }
+  function stageClearPlates(){
+    const list = plateSiteList(readDims()), sites = {};
+    list.forEach(st => { sites[st.key] = false; });
+    platState.sites = sites; platSave(); stageStop(); stageState.step = null; recompute();
+  }
+  function togglePlateSite(key){
+    const list = plateSiteList(readDims());
+    const cur = list.find(st => st.key === key);
+    if (!cur) return;
+    const sites = Object.assign({}, platState.sites);
+    sites[key] = !cur.on;
+    platState.sites = sites; platSave();
+    stageStop(); stageState.step = null;
+    stageState.pop = sites[key] ? key : null;
+    recompute();
+    stageState.pop = null;
+  }
+
+  function stageApply(v, instant){
+    if (!v.steps.length) return;
+    const N = v.steps.length;
+    let n = stageState.step === null ? N : Math.max(0, Math.min(N, stageState.step));
+    if (instant){ v.svg.classList.add("noanim"); }
+    v.steps.forEach((st,i) => st.g.classList.toggle("shown", i < n));
+    if (instant){ requestAnimationFrame(() => requestAnimationFrame(() => v.svg.classList.remove("noanim"))); }
+    v.range.max = N; v.range.value = n;
+    v.cap.textContent = n === 0 ? "步驟 0／" + N + "：尚未組立" : "步驟 " + n + "／" + N + "：" + v.steps[n-1].label;
+    v.playBtn.textContent = stageState.timer ? "⏸ 暫停" : (n >= N ? "↻ 重播" : "▶ 播放");
+    v.svg.classList.toggle("playing", !!stageState.timer);
+  }
+  function stageSetStep(n, instant){
+    stageState.step = n;
+    stageViews.forEach(v => stageApply(v, !!instant));
+  }
+  function stageStop(){
+    if (stageState.timer){ clearInterval(stageState.timer); stageState.timer = null; }
+    stageViews.forEach(v => stageApply(v, true));
+  }
+  function stagePlay(){
+    if (!stageViews.length) return;
+    if (stageState.timer){ stageStop(); return; }
+    const N = stageViews[0].steps.length;
+    if (!N) return;
+    stageSetStep(0, true);
+    const tick = () => {
+      const next = (stageState.step === null ? 0 : stageState.step) + 1;
+      stageState.step = next;
+      stageViews.forEach(v => stageApply(v, false));
+      if (next >= N){ clearInterval(stageState.timer); stageState.timer = null; stageViews.forEach(v => stageApply(v, false)); }
+    };
+    stageState.timer = setInterval(tick, stageState.speed);
+    requestAnimationFrame(() => requestAnimationFrame(tick));
+    stageViews.forEach(v => stageApply(v, false));
+  }
+  function stageStepBy(d){
+    stageStop();
+    const N = stageViews.length ? stageViews[0].steps.length : 0;
+    const cur = stageState.step === null ? N : stageState.step;
+    stageSetStep(Math.max(0, Math.min(N, cur + d)), false);
+  }
+
+  function paintStageView(v){
+    const dims = readDims();
+    const res = renderStage(dims, v.svgBox, { interactive:true, pop:stageState.pop });
+    v.svg = res.svg; v.steps = res.steps;
+    stageApply(v, true);
+    // pop animation needs the shown state first, so it works even after instant apply
+    // plate chips
+    v.chips.innerHTML = "";
+    const lab = document.createElement("span"); lab.className = "stg-pl"; lab.textContent = "加強板位置"; v.chips.appendChild(lab);
+    SITE_GROUPS.forEach(g => {
+      const list = res.sites.filter(st => st.grp === g[0]);
+      if (!list.length) return;
+      const on = list.filter(st => st.on).length;
+      const b = document.createElement("button"); b.type = "button";
+      b.className = "stg-chip" + (on === list.length ? " on" : (on > 0 ? " part" : ""));
+      b.textContent = g[1] + " " + on + "/" + list.length;
+      b.title = "點一下：全部加入／全部移除";
+      b.addEventListener("click", () => stagePlateGroupToggle(g[0]));
+      v.chips.appendChild(b);
+    });
+    const clr = document.createElement("button"); clr.type = "button"; clr.className = "small"; clr.textContent = "清除";
+    clr.addEventListener("click", stageClearPlates); v.chips.appendChild(clr);
+    const total = res.sites.filter(st => st.on).length;
+    v.note.textContent = "目前 " + total + " 片（" + dims.plate.len + "×" + dims.plate.wid + "m，尺寸在「06+ 鐵板」區改）。也可直接點圖上的粉紅方塊增減。";
+  }
+  function paintStages(){ stageViews.forEach(paintStageView); }
+
+  function makeStageView(host){
+    host.innerHTML =
+      '<div class="stg-svg"></div><div class="stg-ctl">' +
+      '<div class="stg-row"><button type="button" class="small" data-a="prev" title="上一步">‹</button>' +
+      '<button type="button" class="small primary stg-play" data-a="play">▶ 播放</button>' +
+      '<button type="button" class="small" data-a="next" title="下一步">›</button>' +
+      '<select data-a="speed" title="播放速度"><option value="1500">慢</option><option value="900" selected>中</option><option value="500">快</option></select></div>' +
+      '<input type="range" class="stg-range" min="0" max="6" value="6" step="1">' +
+      '<div class="stg-cap"></div><div class="stg-plates"></div><div class="stg-note"></div></div>';
+    const v = {
+      host:host, svgBox:host.querySelector(".stg-svg"), range:host.querySelector(".stg-range"),
+      cap:host.querySelector(".stg-cap"), playBtn:host.querySelector(".stg-play"),
+      chips:host.querySelector(".stg-plates"), note:host.querySelector(".stg-note"), steps:[], svg:null
+    };
+    host.querySelector('[data-a="prev"]').addEventListener("click", () => stageStepBy(-1));
+    host.querySelector('[data-a="next"]').addEventListener("click", () => stageStepBy(1));
+    v.playBtn.addEventListener("click", stagePlay);
+    host.querySelector('[data-a="speed"]').addEventListener("change", e => {
+      stageState.speed = parseInt(e.target.value, 10) || 900;
+      stageViews.forEach(x => { const sel = x.host.querySelector('[data-a="speed"]'); if (sel) sel.value = String(stageState.speed); });
+      if (stageState.timer){ stageStop(); stagePlay(); }
+    });
+    v.range.addEventListener("input", () => { stageStop(); stageSetStep(parseInt(v.range.value,10)||0, false); });
+    stageViews.push(v);
+    paintStageView(v);
+    return v;
   }
 
   // ------------------------------------------------------------ BOM + match
@@ -1062,6 +1440,7 @@
       hasReinforce: document.getElementById("in-hasReinforce").checked,
       hasBrace: document.getElementById("in-hasBrace").checked,
       purchaseLen: parseFloat(document.getElementById("in-purchaseLen").value) || 12,
+      plate: { len: platNum(platState.len,1) || 1, wid: platNum(platState.wid,1) || 1, sites: platState.sites || {} },
       specs: {
         col: document.getElementById("spec-col").value.trim(),
         rail: document.getElementById("spec-rail").value.trim(),
@@ -1352,6 +1731,7 @@
   function recompute(){
     const dims = readDims();
     renderStage(dims);
+    paintStages();
     const bom = computeBOM(dims);
     paintBOM(bom);
     const match = computeMatch(bom, inventory, dims.purchaseLen);
@@ -1361,6 +1741,9 @@
     const tonnage = computeTonnage(dims);
     paintTonnage(tonnage);
     scheduleOrderRender();
+    renderPlate();
+    paintStrip();
+    paintProjBar();
   }
 
   // ----------------------------------------------------------- 叫貨計算
@@ -1378,6 +1761,7 @@
   ];
   const ordState = { lens:"8-16", src:"bom", manual: ORD_DEFAULT_MANUAL.map(r => Object.assign({}, r)) };
   const ordSelected = new Map();
+  const ordExpanded = new Set();
   const ordCache = new Map();
   let ordTimer = null, ordRendered = [];
 
@@ -1636,11 +2020,13 @@
       const tw = document.createElement("div");
       tw.className = "tablewrap";
       let html = "<table class='ord-table'><thead><tr><th>採用</th><th>方案</th><th>叫貨組合</th><th class='num'>支數</th><th class='num'>叫貨總長(m)</th><th class='num'>餘料(m)</th><th class='num'>利用率</th><th>切法</th></tr></thead><tbody>";
+      const ORD_TOP = 4;
       opts.forEach((o, oi) => {
         const pills = [];
         if (oi === 0) pills.push("<span class='pill good'>推薦（餘料最少）</span>");
         if (o.waste === 0) pills.push("<span class='pill good'>剛好，無餘料</span>");
-        html += "<tr data-opt='" + escHtml(o.key) + "'" + (o === sel ? " class='sel'" : "") + ">" +
+        const isExtra = oi >= ORD_TOP && o !== sel;
+        html += "<tr data-opt='" + escHtml(o.key) + "' class='" + (o === sel ? "sel " : "") + (isExtra ? "ord-extra" : "") + "'>" +
           "<td><input type='radio' name='ord-pick-" + gi + "' value='" + escHtml(o.key) + "'" + (o === sel ? " checked" : "") + "></td>" +
           "<td>" + ORD_KIND_LABEL[o.kind] + (pills.length ? "<div class='ord-pills'>" + pills.join("") + "</div>" : "") + "</td>" +
           "<td class='combo'>" + ordComboText(o.parts) + "</td>" +
@@ -1649,7 +2035,20 @@
           "<td><details><summary>看切法</summary><div>" + ordPlanLines(o).map(escHtml).join("<br>") + "</div></details></td></tr>";
       });
       html += "</tbody></table>";
+      const extraN = opts.filter((o, oi) => oi >= ORD_TOP && o !== sel).length;
+      if (extraN > 0) html += "<div style='padding:4px 10px 8px;'><button type='button' class='small ord-more'>顯示其餘 " + extraN + " 種方案</button></div>";
       tw.innerHTML = html;
+      if (ordExpanded.has(g.key)) tw.classList.add("show-all");
+      const moreBtn = tw.querySelector(".ord-more");
+      if (moreBtn){
+        const syncMore = () => { moreBtn.textContent = tw.classList.contains("show-all") ? "收合其餘方案" : "顯示其餘 " + extraN + " 種方案"; };
+        syncMore();
+        moreBtn.addEventListener("click", () => {
+          tw.classList.toggle("show-all");
+          if (tw.classList.contains("show-all")) ordExpanded.add(g.key); else ordExpanded.delete(g.key);
+          syncMore();
+        });
+      }
       tw.querySelectorAll("input[type=radio]").forEach(rd => {
         rd.addEventListener("change", () => {
           const o = opts.find(x => x.key === rd.value);
@@ -1686,6 +2085,7 @@
     }
     failed.forEach(r => { html += "<p class='callout' style='margin-top:8px;'>⚠️ " + (r.g.spec ? escHtml(r.g.spec) : "（未填規格）") + "：" + escHtml(r.error) + "</p>"; });
     host.innerHTML = html;
+    paintStrip();
     const copyBtn = document.getElementById("btn-ord-copy");
     if (copyBtn) copyBtn.addEventListener("click", async () => {
       const lines = ["型鋼叫貨單"];
@@ -1728,6 +2128,14 @@
     document.getElementById("ord-manual").hidden = ordState.src !== "manual";
   }
 
+  function ordApplyInputs(o){
+    ordState.lens = (o && typeof o.lens === "string") ? o.lens : "8-16";
+    ordState.src = (o && (o.src === "bom" || o.src === "manual")) ? o.src : "bom";
+    ordState.manual = (o && Array.isArray(o.manual) && o.manual.length ? o.manual : ORD_DEFAULT_MANUAL).map(r => Object.assign({}, r));
+    ordSelected.clear(); ordExpanded.clear();
+    if (o && o.selected && typeof o.selected === "object") Object.keys(o.selected).forEach(k => ordSelected.set(k, o.selected[k]));
+    ordSave(); syncOrderControls(); paintOrderManual();
+  }
   ordLoad();
   syncOrderControls();
   paintOrderManual();
@@ -1745,13 +2153,162 @@
     ordSave(); paintOrderManual(); renderOrder();
   });
 
+  // ----------------------------------------------------------- 鐵板（加強板）
+  const PLATE_KEY = "steelCalcPlate_v1";
+  const PLATE_DEFAULT = { len:1, wid:1, thk:20, per:1, pos:"", slen:10, swid:1, pn:18.5, ps:10.5, sites:{} };
+  const PLATE_IDS = { len:"plt-len", wid:"plt-wid", thk:"plt-thk", per:"plt-per", pos:"plt-pos", slen:"plt-slen", swid:"plt-swid", pn:"plt-pn", ps:"plt-ps" };
+  const platState = Object.assign({}, PLATE_DEFAULT);
+  const PLATE_DENSITY = 7850; // kg/m3
+
+  function platNormalize(o){
+    const out = Object.assign({}, PLATE_DEFAULT);
+    if (o && typeof o === "object") Object.keys(PLATE_DEFAULT).forEach(k => {
+      if (o[k] !== undefined && o[k] !== null) out[k] = o[k];
+    });
+    out.sites = (o && o.sites && typeof o.sites === "object") ? Object.assign({}, o.sites) : {};
+    return out;
+  }
+  function platLoad(){
+    try {
+      const raw = localStorage.getItem(PLATE_KEY);
+      if (raw){ Object.assign(platState, platNormalize(JSON.parse(raw))); platState.sites = {}; } // sites belong to a project, not to the browser
+    } catch(e){ /* storage disabled or corrupted — use defaults */ }
+  }
+  function platSave(){ try { localStorage.setItem(PLATE_KEY, JSON.stringify(platState)); } catch(e){ /* harmless */ } }
+  function platSync(){
+    Object.keys(PLATE_IDS).forEach(k => { const el = document.getElementById(PLATE_IDS[k]); if (el) el.value = platState[k]; });
+  }
+  function platNum(v, d){ const n = parseFloat(v); return isFinite(n) ? n : d; }
+
+  function platCompute(dims){
+    const len = platNum(platState.len, 0), wid = platNum(platState.wid, 0), thk = platNum(platState.thk, 0);
+    const per = Math.max(0, Math.round(platNum(platState.per, 0)));
+    const autoPos = dims.plate ? plateSiteList(dims).filter(st => st.on).length : dims.colCount;
+    const manualPos = String(platState.pos).trim() !== "" && isFinite(parseFloat(platState.pos));
+    const positions = manualPos ? Math.max(0, Math.round(parseFloat(platState.pos))) : autoPos;
+    const slen = platNum(platState.slen, 0), swid = platNum(platState.swid, 0);
+    const pn = platNum(platState.pn, 0), ps = platNum(platState.ps, 0);
+    const pieces = positions * per;
+    const unitKg = len * wid * thk / 1000 * PLATE_DENSITY;
+    const needKg = pieces * unitKg;
+    const E = 1e-9;
+    const perSheet = Math.max(
+      Math.floor(swid / (wid || Infinity) + E) * Math.floor(slen / (len || Infinity) + E),
+      Math.floor(swid / (len || Infinity) + E) * Math.floor(slen / (wid || Infinity) + E));
+    const valid = len > 0 && wid > 0 && thk > 0 && slen > 0 && swid > 0;
+    const sheets = (valid && perSheet > 0) ? Math.ceil(pieces / perSheet) : 0;
+    const sheetKg = slen * swid * thk / 1000 * PLATE_DENSITY;
+    const buyKg = sheets * sheetKg;
+    return { len, wid, thk, per, positions, manualPos, autoPos, pieces, unitKg, needKg, perSheet, sheets, sheetKg, buyKg,
+             spare: sheets * perSheet - pieces, costN: buyKg * pn, costS: buyKg * ps, valid, slen, swid, pn, ps };
+  }
+
+  function renderPlate(){
+    const host = document.getElementById("plt-result");
+    if (!host) return;
+    const r = platCompute(readDims());
+    const hint = document.getElementById("plt-hint");
+    if (hint) hint.textContent = "（" + fmt(r.len) + "×" + fmt(r.wid) + "M×" + fmt(r.thk) + "mm；標準板 " + fmt(r.slen) + "×" + fmt(r.swid) + "M）";
+    if (!r.valid){
+      host.innerHTML = "<p class='callout' style='margin-top:8px;'>請展開「規格設定」，填寫加強板與標準鋼板的長、寬、厚度。</p>";
+      return;
+    }
+    if (r.perSheet < 1){
+      host.innerHTML = "<p class='callout' style='margin-top:8px;'>標準鋼板（" + fmt(r.slen) + "×" + fmt(r.swid) + " m）放不下一片加強板（" + fmt(r.len) + "×" + fmt(r.wid) + " m），請檢查尺寸。</p>";
+      return;
+    }
+    const chip = (v, l) => "<div class='sk'><b>" + v + "</b><span>" + l + "</span></div>";
+    host.innerHTML = "<div class='strip'>" +
+      chip(r.pieces + " 片", r.positions + " 處×" + r.per + " 片") +
+      chip(fmt(r.unitKg) + " kg", "單片重") +
+      chip(r.sheets + " 張", "標準板（每張切 " + r.perSheet + " 片）") +
+      chip(fmt(r.buyKg) + " kg", "叫料重量") +
+      chip(fmt(r.costN), "金額 正常品（元）") +
+      chip(fmt(r.costS), "金額 廢棄品（元）") +
+      "</div>";
+  }
+
+  platLoad();
+  platSync();
+  Object.keys(PLATE_IDS).forEach(k => {
+    document.getElementById(PLATE_IDS[k]).addEventListener("input", e => {
+      platState[k] = e.target.value; platSave(); renderPlate(); paintStrip();
+    });
+  });
+
+  // ----------------------------------------------------------- tabs + summary strip
+  const TAB_KEY = "steelCalcTab_v1";
+  const TAB_DEFS = [["s04","可配組數"],["s05","噸位快算"],["s07","庫存清單"]];
+  let calcTabKey = "";
+  function setCalcTab(key){
+    const main = document.querySelector("#view-calc .main");
+    if (!main) return;
+    if (!TAB_DEFS.some(t => t[0] === key)) key = "";
+    calcTabKey = key;
+    TAB_DEFS.forEach(t => {
+      const sec = main.querySelector(':scope > section[data-print-section="' + t[0] + '"]');
+      if (sec) sec.classList.toggle("tab-off", t[0] !== key);
+    });
+    main.querySelectorAll("#calc-tabs button").forEach(b => b.classList.toggle("on", b.getAttribute("data-tab") === key));
+    try { localStorage.setItem(TAB_KEY, key); } catch(e){ /* harmless */ }
+  }
+  function initCalcTabs(){
+    const main = document.querySelector("#view-calc .main");
+    if (!main || document.getElementById("calc-tabs")) return;
+    const strip = document.createElement("div"); strip.className = "strip"; strip.id = "calc-strip";
+    const bar = document.createElement("nav"); bar.className = "tabbar"; bar.id = "calc-tabs";
+    const lab = document.createElement("span"); lab.className = "tl"; lab.textContent = "更多工具（點一下展開，再點收起）："; bar.appendChild(lab);
+    TAB_DEFS.forEach(t => {
+      const b = document.createElement("button"); b.type = "button"; b.setAttribute("data-tab", t[0]); b.textContent = t[1];
+      b.addEventListener("click", () => setCalcTab(calcTabKey === t[0] ? "" : t[0]));
+      bar.appendChild(b);
+    });
+    // keep DOM order of sections untouched (print order); only the helper widgets go first / before the secondary sections
+    main.insertBefore(strip, main.firstChild);
+    const firstMore = main.querySelector(':scope > section[data-print-section="s01"]');
+    main.insertBefore(bar, firstMore);
+    if (firstMore) firstMore.classList.add("tab-off"); // the live preview is in the sidebar; this static copy is for print only
+    let saved = "";
+    try { saved = localStorage.getItem(TAB_KEY) || ""; } catch(e){ /* harmless */ }
+    setCalcTab(saved);
+  }
+  function paintStrip(){
+    const host = document.getElementById("calc-strip");
+    if (!host) return;
+    const dims = readDims();
+    const bom = computeBOM(dims);
+    let bomTotal = 0; bom.forEach(r => { bomTotal += r.subtotal; });
+    const mt = matchTotals(computeMatch(bom, inventory, dims.purchaseLen));
+    const done = ordRendered.filter(r => r.sel);
+    let ordBars = 0, ordLen = 0;
+    done.forEach(r => r.sel.parts.forEach(p => { ordBars += p.count; ordLen += p.len * p.count; }));
+    const pl = platCompute(dims);
+    const cell = (v, l) => "<div class='sk'><b>" + v + "</b><span>" + l + "</span></div>";
+    host.innerHTML =
+      cell(fmt(bomTotal) + " m", "型鋼需求總長") +
+      cell(mt.totalPurchase + " 支", "庫存不足需採購（" + dims.purchaseLen + "M／支）") +
+      cell(done.length ? (ordBars + " 支／" + fmtM(ordLen) + " m") : "—", "型鋼叫貨（選定方案）") +
+      cell(pl.valid && pl.perSheet > 0 ? (pl.pieces + " 片／" + pl.sheets + " 張") : "—", "鐵板加強板（片／叫料張數）");
+  }
+
+  initCalcTabs();
   // -------------------------------------------------------------- controls
   document.querySelectorAll('.side input, #in-hasReinforce').forEach(el => {
     el.addEventListener("input", recompute);
     el.addEventListener("change", recompute);
   });
   document.getElementById("in-targetTons").addEventListener("input", recompute);
-  document.getElementById("btn-replay-stage").addEventListener("click", () => { renderStage(readDims()); });
+  makeStageView(document.getElementById("stage-host-side"));
+  (function(){
+    const zoom = document.getElementById("stage-zoom");
+    let zv = null;
+    function openZoom(){ zoom.hidden = false; if (!zv){ zv = makeStageView(document.getElementById("stage-host-zoom")); } else { stageViews.push(zv); paintStageView(zv); } }
+    function closeZoom(){ zoom.hidden = true; if (zv){ const i = stageViews.indexOf(zv); if (i >= 0) stageViews.splice(i,1); } }
+    document.getElementById("btn-stg-zoom").addEventListener("click", openZoom);
+    document.getElementById("btn-stg-zoomx").addEventListener("click", closeZoom);
+    zoom.addEventListener("click", e => { if (e.target === zoom) closeZoom(); });
+    document.addEventListener("keydown", e => { if (e.key === "Escape" && !zoom.hidden) closeZoom(); });
+  })();
 
   document.getElementById("btn-demo").addEventListener("click", () => {
     document.getElementById("in-railLen").value = DEMO_PRESET.railLen;
@@ -1784,6 +2341,7 @@
     document.getElementById("spec-tie").value = "400 x 400";
     document.getElementById("spec-reinforce").value = "364 x 371";
     document.getElementById("spec-brace").value = "700 x 300";
+    platState.sites = {}; platSave(); stageState.step = null;
     recompute();
   });
 
@@ -1840,7 +2398,9 @@
       specReinforce: document.getElementById("spec-reinforce").value,
       specBrace: document.getElementById("spec-brace").value,
       knownTons: document.getElementById("in-knownTons").value,
-      knownLen: document.getElementById("in-knownLen").value
+      knownLen: document.getElementById("in-knownLen").value,
+      plate: JSON.parse(JSON.stringify(platState)),
+      order: { lens: ordState.lens, src: ordState.src, manual: ordState.manual.map(r => Object.assign({}, r)), selected: Object.fromEntries(ordSelected) }
     };
   }
 
@@ -1861,6 +2421,11 @@
     document.getElementById("spec-brace").value = inputs.specBrace || "";
     if (inputs.knownTons !== undefined && inputs.knownTons !== "") document.getElementById("in-knownTons").value = inputs.knownTons;
     if (inputs.knownLen !== undefined && inputs.knownLen !== "") document.getElementById("in-knownLen").value = inputs.knownLen;
+    if (inputs.plate && typeof inputs.plate === "object"){ Object.assign(platState, platNormalize(inputs.plate)); }
+    else { platState.sites = {}; }   // older project without plate info: keep the plate spec/prices, drop old positions
+    platSave(); platSync();
+    ordApplyInputs(inputs.order);
+    stageState.step = null;
     recompute();
   }
 
@@ -2035,6 +2600,8 @@
   function applyCloudSnap(){
     if (!lastCloudSnap) return;
     projects = lastCloudSnap.docs.map(d => normalizeCloudDoc(d.id, d.data()));
+    if (pendingCurrent){ const m = projects.find(x => x.name === pendingCurrent.name && x.savedAt === pendingCurrent.savedAt); if (m){ pendingCurrent = null; setCurrent(m.id, null); } }
+    tryRestoreCurrent();
     paintProjects(); paintGallery(); updateLandingCounts();
     if (!document.getElementById("project-detail-overlay").hidden && currentDetailProjectId){
       const p = findProject(currentDetailProjectId);
@@ -2422,11 +2989,13 @@
       photos: []
     };
     if (cloudMode){
-      try { await cloudDb.collection("projects").add(data); } // subscribeCloudProjects() re-renders once this lands
+      try { const ref = await cloudDb.collection("projects").add(data); if (ref && ref.id) setCurrent(ref.id, null); else pendingCurrent = { name: data.name, savedAt: data.savedAt }; } // subscribeCloudProjects() re-renders once this lands
       catch(e){ alert("存成專案失敗（雲端）：" + (e && e.message ? e.message : e)); return; }
     } else {
-      projects.push(Object.assign({ id: "p" + Date.now() + "_" + Math.random().toString(36).slice(2,7) }, data));
+      const newId = "p" + Date.now() + "_" + Math.random().toString(36).slice(2,7);
+      projects.push(Object.assign({ id: newId }, data));
       saveProjectsToStorage();
+      setCurrent(newId, null);
       paintProjects();
     }
     nameInput.value = "";
@@ -2435,6 +3004,7 @@
 
   async function deleteProject(id){
     compareChecked.delete(id);
+    if (id === currentProjectId){ currentProjectId = null; try{ localStorage.removeItem(CUR_KEY); }catch(e){} }
     if (cloudMode){
       const proj = findProject(id);
       try { await cloudDb.doc("projects/"+id).delete(); }
@@ -2466,6 +3036,7 @@
     const statusFilter = (document.getElementById("filter-status")||{}).value || "";
     host.innerHTML = "";
 
+    paintProjBar();
     if (projects.length === 0){
       host.innerHTML = "<div class='project-card-empty'>尚未存檔——填好①②③設定後，在上方輸入專案名稱並按「存成專案」</div>";
       document.getElementById("filter-count").textContent = "";
@@ -2502,7 +3073,7 @@
       });
       head.appendChild(chk);
       const titleWrap = document.createElement("div");
-      titleWrap.innerHTML = "<div class='pc-title'>"+escHtml(p.name)+"</div>" +
+      titleWrap.innerHTML = "<div class='pc-title'>"+escHtml(p.name)+(p.id === currentProjectId ? " <span class='pill good'>編輯中</span>" : "")+"</div>" +
         (p.location ? "<span class='pc-loc'>📍 "+escHtml(p.location)+"</span>" : "");
       head.appendChild(titleWrap);
       card.appendChild(head);
@@ -2531,8 +3102,8 @@
       detailBtn.type = "button"; detailBtn.className = "small"; detailBtn.textContent = "詳情";
       detailBtn.addEventListener("click", () => openProjectDetail(p));
       const loadBtn = document.createElement("button");
-      loadBtn.type = "button"; loadBtn.className = "small"; loadBtn.textContent = "載入";
-      loadBtn.addEventListener("click", () => applyProjectInputs(p.inputs));
+      loadBtn.type = "button"; loadBtn.className = "small"; loadBtn.textContent = "開啟編輯";
+      loadBtn.addEventListener("click", async () => { if (p.id === currentProjectId){ showView("calc"); return; } if (!(await guardDirty())) return; setCurrent(p.id, p.inputs); showView("calc"); });
       const delBtn = document.createElement("button");
       delBtn.type = "button"; delBtn.className = "small danger"; delBtn.textContent = "刪除";
       delBtn.addEventListener("click", () => deleteProject(p.id));
@@ -3087,6 +3658,7 @@
       hasReinforce: !!inputs.hasReinforce,
       hasBrace: inputs.hasBrace !== undefined ? !!inputs.hasBrace : true, // older saved projects predate this switch — treat as "on"
       purchaseLen: parseFloat(inputs.purchaseLen) || 12,
+      plate: inputs.plate ? { len: platNum(inputs.plate.len,1) || 1, wid: platNum(inputs.plate.wid,1) || 1, sites: (inputs.plate.sites && typeof inputs.plate.sites === "object") ? inputs.plate.sites : {} } : null,
       specs: {
         col: (inputs.specCol||"").trim(), rail: (inputs.specRail||"").trim(), tie: (inputs.specTie||"").trim(),
         reinforce: (inputs.specReinforce||"").trim(), brace: (inputs.specBrace||"").trim()
@@ -3156,7 +3728,7 @@
     return "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
       "<title>" + escHtml(title) + "</title>" + fontLinks + styleBlocks +
       "<style>body{background:#fff;padding:18px;} .wrap{max-width:1100px;margin:0 auto;}" +
-      "button,.invtoolbar,.side,.toolbar-export,.modal-overlay,.lightbox-overlay{display:none !important;}" +
+      "button,.invtoolbar,.projbar,.side,.toolbar-export,.modal-overlay,.lightbox-overlay,.stg-zoom,.tabbar,.strip{display:none !important;}.tab-off{display:block !important;}.ord-table tr.ord-extra{display:table-row !important;}" +
       ".inv-table th:last-child,.inv-table td:last-child{display:none !important;}" +
       "input,select,textarea{pointer-events:none;}</style>" +
       "</head><body><div class=\"wrap\">" + bodyHtml + "</div>" +
@@ -3235,7 +3807,14 @@
       if (el) el.hidden = (v !== view);
     });
     document.getElementById("header-toolbar").hidden = (view === "home");
+    document.body.classList.toggle("calc-on", view === "calc");
     document.getElementById("app-footer").hidden = !(view === "calc" || view === "projects");
+    document.getElementById("projbar").hidden = (view !== "calc");
+    if (view === "calc") paintProjBar();
+    if (view === "calc" && !stageState.played){
+      stageState.played = true;
+      if (!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches)) setTimeout(stagePlay, 450);
+    }
     if (view === "home") updateLandingCounts();
     if (view === "projects") paintProjects();
     if (view === "gallery") paintGallery();
@@ -3407,12 +3986,163 @@
   document.getElementById("btn-export-excel").addEventListener("click", exportExcel);
   document.getElementById("btn-print").addEventListener("click", openPrintModal);
 
+  // ---------------------------------------------------- 目前專案（新增／切換／儲存）
+  const $id = id => document.getElementById(id);
+  function currentSig(){ try { return JSON.stringify(collectProjectInputs()); } catch(e){ return ""; } }
+  function isDirty(){ return currentSig() !== savedSig; }
+  function blankInputs(){
+    return { railLen:16, tieLen:8, colCount:8, colLen:5, braceLen:2, hasReinforce:true, hasBrace:true, purchaseLen:12,
+      specCol:"400 x 400", specRail:"428 x 407, 394 x 398", specTie:"400 x 400", specReinforce:"364 x 371", specBrace:"700 x 300",
+      plate: JSON.parse(JSON.stringify(PLATE_DEFAULT)), order: null };
+  }
+  function summaryFromInputs(inputs){
+    const dims = dimsFromProjectInputs(inputs), bom = computeBOM(dims);
+    const match = computeMatch(bom, inventory, dims.purchaseLen);
+    return projectSummary(dims, bom, match, computeGroupCapacity(match));
+  }
+  async function createProjectRecord(name, loc, inputs){
+    const data = { name:name, location:loc, savedAt:new Date().toISOString(), inputs:inputs, summary:summaryFromInputs(inputs), photos:[] };
+    if (cloudMode){
+      try { const ref = await cloudDb.collection("projects").add(data); if (ref && ref.id) return ref.id; pendingCurrent = { name:name, savedAt:data.savedAt }; return null; }
+      catch(e){ alert("建立專案失敗（雲端）：" + (e && e.message ? e.message : e)); throw e; }
+    }
+    const id = "p" + Date.now() + "_" + Math.random().toString(36).slice(2,7);
+    projects.push(Object.assign({ id:id }, data));
+    saveProjectsToStorage();
+    return id;
+  }
+  function setCurrent(id, inputs){
+    if (inputs) applyProjectInputs(inputs);
+    currentProjectId = id || null;
+    savedSig = currentSig();
+    try { if (id) localStorage.setItem(CUR_KEY, id); else localStorage.removeItem(CUR_KEY); } catch(e){ /* harmless */ }
+    paintProjects(); updateLandingCounts();
+  }
+  let restoreId = null;
+  try { restoreId = localStorage.getItem(CUR_KEY); } catch(e){ /* harmless */ }
+  function tryRestoreCurrent(){
+    if (!restoreId || currentProjectId || isDirty()) return;
+    const p = findProject(restoreId);
+    if (p){ restoreId = null; setCurrent(p.id, p.inputs); }
+  }
+
+  let pbKey = "";
+  function paintProjBar(){
+    const sel = $id("pb-select");
+    if (!sel) return;
+    const list = projects.slice().sort((a,b) => String(b.savedAt||"").localeCompare(String(a.savedAt||"")));
+    const key = currentProjectId + "|" + list.map(p => p.id + p.name + (p.location||"")).join(",");
+    if (key !== pbKey){
+      pbKey = key;
+      let h = currentProjectId ? "" : "<option value=''>（未命名草稿）</option>";
+      list.forEach(p => { h += "<option value='" + escHtml(p.id) + "'>" + escHtml(p.name) + (p.location ? "（" + escHtml(p.location) + "）" : "") + "</option>"; });
+      sel.innerHTML = h;
+      sel.value = currentProjectId || "";
+    }
+    const p = findProject(currentProjectId);
+    const st = $id("pb-state");
+    $id("pb-loc").textContent = p && p.location ? "📍 " + p.location : "";
+    if (!p){ st.textContent = "草稿・尚未存成專案"; st.className = "pb-state draft"; }
+    else if (isDirty()){ st.textContent = "● 有未儲存的變更"; st.className = "pb-state dirty"; }
+    else { st.textContent = "✓ 已儲存 " + fmtDate(p.savedAt); st.className = "pb-state ok"; }
+    $id("pb-rename").disabled = !p;
+    const lc = $id("landing-current");
+    if (lc) lc.textContent = p ? "目前專案：" + p.name : "目前是未存檔草稿";
+  }
+
+  function guardDirty(){
+    return new Promise(resolve => {
+      if (!isDirty()){ resolve(true); return; }
+      const p = findProject(currentProjectId), ov = $id("dg-overlay");
+      $id("dg-msg").textContent = p ? "「" + p.name + "」有尚未儲存的變更。" : "目前的草稿還沒存成專案。";
+      $id("dg-save").textContent = p ? "儲存並繼續" : "存成專案並繼續";
+      ov.hidden = false;
+      const ids = ["dg-save","dg-discard","dg-cancel"];
+      const fns = {};
+      const done = v => { ov.hidden = true; ids.forEach(i => $id(i).removeEventListener("click", fns[i])); resolve(v); };
+      fns["dg-save"] = async () => { const ok = p ? await saveCurrent() : await saveDraftPrompt(); done(!!ok); };
+      fns["dg-discard"] = () => done(true);
+      fns["dg-cancel"] = () => done(false);
+      ids.forEach(i => $id(i).addEventListener("click", fns[i]));
+    });
+  }
+  async function saveDraftPrompt(){
+    const name = (window.prompt("專案名稱：", "") || "").trim();
+    if (!name) return false;
+    try { const id = await createProjectRecord(name, "", collectProjectInputs()); setCurrent(id, null); return true; } catch(e){ return false; }
+  }
+  async function saveCurrent(){
+    const p = findProject(currentProjectId);
+    if (!p){ openNewProject("current"); return false; }
+    const dims = readDims(), bom = computeBOM(dims);
+    const match = computeMatch(bom, inventory, dims.purchaseLen), gc = computeGroupCapacity(match);
+    await updateProjectFields(p.id, { savedAt:new Date().toISOString(), inputs:collectProjectInputs(), summary:projectSummary(dims, bom, match, gc) });
+    savedSig = currentSig(); paintProjBar();
+    return true;
+  }
+
+  function openNewProject(tpl, presetName){
+    const cur = findProject(currentProjectId);
+    $id("np-name").value = presetName || "";
+    $id("np-loc").value = (tpl !== "blank" && cur && cur.location) ? cur.location : "";
+    const locs = Array.from(new Set(projects.map(p => (p.location||"").trim()).filter(Boolean)));
+    $id("np-loc-list").innerHTML = locs.map(l => "<option value='" + escHtml(l) + "'>").join("");
+    const copySel = $id("np-copy");
+    copySel.innerHTML = projects.map(p => "<option value='" + escHtml(p.id) + "'>" + escHtml(p.name) + (p.location ? "（" + escHtml(p.location) + "）" : "") + "</option>").join("");
+    if (cur) copySel.value = cur.id;
+    document.querySelectorAll("input[name=np-tpl]").forEach(r => { r.checked = (r.value === (tpl || "blank")); });
+    document.querySelector("input[name=np-tpl][value=copy]").disabled = projects.length === 0;
+    $id("np-overlay").hidden = false;
+    setTimeout(() => $id("np-name").focus(), 30);
+  }
+  async function submitNewProject(){
+    const name = $id("np-name").value.trim();
+    if (!name){ $id("np-name").focus(); return; }
+    const loc = $id("np-loc").value.trim();
+    const tpl = (document.querySelector("input[name=np-tpl]:checked") || {}).value || "blank";
+    let inputs;
+    if (tpl === "current") inputs = collectProjectInputs();
+    else {
+      $id("np-overlay").hidden = true;
+      if (!(await guardDirty())){ $id("np-overlay").hidden = false; return; }
+      if (tpl === "copy"){
+        const src = findProject($id("np-copy").value);
+        inputs = src && src.inputs ? JSON.parse(JSON.stringify(src.inputs)) : blankInputs();
+      } else inputs = blankInputs();
+    }
+    $id("np-overlay").hidden = true;
+    try { const id = await createProjectRecord(name, loc, inputs); setCurrent(id, inputs); showView("calc"); }
+    catch(e){ /* alert already shown */ }
+  }
+  $id("np-ok").addEventListener("click", submitNewProject);
+  $id("np-name").addEventListener("keydown", e => { if (e.key === "Enter") submitNewProject(); });
+  $id("np-cancel").addEventListener("click", () => { $id("np-overlay").hidden = true; });
+  $id("np-x").addEventListener("click", () => { $id("np-overlay").hidden = true; });
+  $id("pb-new").addEventListener("click", () => openNewProject("blank"));
+  $id("landing-new").addEventListener("click", () => openNewProject("blank"));
+  $id("pb-save").addEventListener("click", saveCurrent);
+  $id("pb-saveas").addEventListener("click", () => { const p = findProject(currentProjectId); openNewProject("current", p ? p.name + " 副本" : ""); });
+  $id("pb-rename").addEventListener("click", () => { const p = findProject(currentProjectId); if (p) editProjectMeta(p); });
+  $id("pb-select").addEventListener("change", async e => {
+    const id = e.target.value, p = findProject(id);
+    if (!p || id === currentProjectId) return;
+    if (!(await guardDirty())){ pbKey = ""; paintProjBar(); return; }
+    setCurrent(p.id, p.inputs);
+  });
+  ["input","change"].forEach(ev => document.addEventListener(ev, () => setTimeout(paintProjBar, 0)));
+  document.addEventListener("keydown", e => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S") && !$id("view-calc").hidden){ e.preventDefault(); saveCurrent(); }
+  });
+  window.addEventListener("beforeunload", e => { if (currentProjectId && isDirty()){ e.preventDefault(); e.returnValue = ""; } });
+
   // -------------------------------------------------------------- bootstrap
   loadSampleInventory();
   loadProjectsFromStorage();      // render immediately from local storage — never block first paint on a cloud/permission round trip
   seedDefaultProjectsIfEmpty();
   paintProjects();
   recompute();
+  savedSig = currentSig();
+  tryRestoreCurrent();
   showView("home");
   updateSharedPanel();
   updateStorageModeNote();        // shows the "📱 僅本機儲存" badge by default; flips to "☁️ 雲端共用中" below if this view gets the capability
