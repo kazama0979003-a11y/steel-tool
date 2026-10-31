@@ -3041,7 +3041,59 @@
     updateStorageModeNote(); updateSharedPanel();
     await ensureCloudSeeded();
     subscribeCloudProjects();
+    migrateLocalToShared().catch(e => console.warn("本機專案搬移失敗", e));
     return true;
+  }
+
+  // 第一次連上共用資料庫時，自動把「這台電腦瀏覽器裡原本存的專案（含照片）」搬進去。
+  // 本機資料不會被刪除；每個專案只搬一次（記錄在 MIGRATED_KEY），內容相同的專案不重複建立。
+  const MIGRATED_KEY = "steelCalcMigratedToShared_v1";
+  let migratingLocal = false;
+  async function migrateLocalToShared(){
+    if (!sharedBackend || migratingLocal) return;
+    let local = [];
+    try { local = JSON.parse(localStorage.getItem(PROJECTS_KEY) || "[]"); } catch(e){ return; }
+    if (!Array.isArray(local) || !local.length) return;
+    let done = new Set();
+    try { done = new Set(JSON.parse(localStorage.getItem(MIGRATED_KEY) || "[]")); } catch(e){ /* ignore */ }
+    const todo = local.filter(p => p && p.name && p.inputs && p.id && !done.has(p.id));
+    if (!todo.length) return;
+    migratingLocal = true;
+    let added = 0, skipped = 0, photoCount = 0, photoFails = 0;
+    try {
+      const cur = await cloudDb.collection("projects").get();
+      const sigA = d => (d.name || "") + "|" + JSON.stringify(d.inputs || {});
+      const sigB = d => (d.name || "") + "|" + (d.savedAt || "");
+      const have = new Set();
+      cur.docs.forEach(d => { const v = d.data() || {}; have.add(sigA(v)); have.add(sigB(v)); });
+      const saveDone = () => { try { localStorage.setItem(MIGRATED_KEY, JSON.stringify(Array.from(done))); } catch(e){ /* ignore */ } };
+      for (const p of todo){
+        if (have.has(sigA(p)) || have.has(sigB(p))){ done.add(p.id); skipped++; saveDone(); continue; }
+        const photos = [];
+        for (const ph of (Array.isArray(p.photos) ? p.photos : [])){
+          if (!ph) continue;
+          if (ph.assetId){ photos.push({ id: ph.id || ("ph" + Date.now() + "_" + Math.random().toString(36).slice(2,7)), assetId: ph.assetId, addedAt: ph.addedAt || new Date().toISOString() }); photoCount++; }
+          else if (ph.dataUrl && ph.dataUrl.indexOf("data:") === 0){
+            try {
+              const res = await cloudAssets.upload(dataUrlToBlob(ph.dataUrl), { type: "image/jpeg" });
+              photos.push({ id: ph.id || ("ph" + Date.now() + "_" + Math.random().toString(36).slice(2,7)), assetId: res.id, addedAt: ph.addedAt || new Date().toISOString() });
+              photoCount++;
+            } catch(e){ photoFails++; }
+          }
+        }
+        await cloudDb.collection("projects").add({
+          name: p.name, location: p.location || "", savedAt: p.savedAt || new Date().toISOString(),
+          inputs: p.inputs, summary: p.summary || {}, photos: photos
+        });
+        done.add(p.id); have.add(sigA(p)); have.add(sigB(p)); added++; saveDone();
+      }
+    } finally { migratingLocal = false; }
+    if (added > 0){
+      alert("已把這台電腦原本存的 " + added + " 個專案（含 " + photoCount + " 張照片）搬進共用資料庫，現在所有人都看得到了。" +
+        (skipped > 0 ? "\n（另有 " + skipped + " 個內容相同，沒有重複建立）" : "") +
+        (photoFails > 0 ? "\n有 " + photoFails + " 張照片搬移失敗，可到專案詳情重新上傳。" : "") +
+        "\n這台電腦瀏覽器裡的原始資料仍保留，不會被刪除。");
+    }
   }
 
   function disconnectSharedBackend(){
