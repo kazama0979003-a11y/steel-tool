@@ -1017,6 +1017,7 @@
           <button class="primary" id="btn-save-project" type="button">存成專案</button>
           <button class="ghost" id="btn-export-projects" type="button">匯出專案檔</button>
           <button class="ghost" id="btn-import-projects" type="button">匯入專案檔</button>
+          <button class="ghost" id="btn-trash" type="button">回收桶（0）</button>
           <input type="file" id="file-import-projects" accept="application/json" style="display:none;">
         </div>
       </div>
@@ -1088,6 +1089,15 @@
       </div>
     </div>
   </div>
+  <div class="modal-overlay" id="trash-overlay" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <button type="button" class="modal-close-x" id="trash-x" aria-label="關閉">✕</button>
+      <h3>回收桶</h3>
+      <p class="modal-sub">刪除的專案會留在這裡（最多 30 個），按「還原」就會回到歷史專案。</p>
+      <div class="modal-body-scroll" id="trash-list"></div>
+      <div class="modal-actions"><button type="button" class="ghost" id="trash-close">關閉</button></div>
+    </div>
+  </div>
   <div class="modal-overlay" id="help-overlay" hidden>
     <div class="modal-card" role="dialog" aria-modal="true">
       <button type="button" class="modal-close-x" id="help-x" aria-label="關閉">✕</button>
@@ -1136,7 +1146,7 @@
       <div class="modal-body-scroll" id="project-detail-body"></div>
       <div class="modal-actions">
         <button type="button" class="ghost" id="btn-detail-export-excel">匯出Excel（本專案）</button>
-        <button type="button" class="ghost" id="btn-detail-print">列印（型鋼需求＋組立圖）</button>
+        <button type="button" class="ghost" id="btn-detail-print">列印（完整專案報告）</button>
         <span class="spacer"></span>
         <button type="button" class="ghost" id="btn-detail-close">關閉</button>
       </div>
@@ -1581,10 +1591,11 @@
   // 左側③「已知總噸數 ÷ 已知全長合計」決定。這是使用者自訂的簡化假設，
   // 不是結構工程計算，僅供初步規劃參考。
   function computeTonnage(dims){
-    const knownTons = parseFloat(document.getElementById("in-knownTons").value) || 0;
-    const knownLen = parseFloat(document.getElementById("in-knownLen").value) || 0;
+    return computeTonnageFrom(dims, parseFloat(document.getElementById("in-knownTons").value) || 0, parseFloat(document.getElementById("in-knownLen").value) || 0);
+  }
+  function computeTonnageFrom(dims, knownTons, knownLen){
     const ratio = knownLen > 0 ? knownTons / knownLen : 0; // 公噸／公尺
-    const targetTons = parseFloat(document.getElementById("in-targetTons").value) || 0;
+    const targetTons = (document.getElementById("in-targetTons") ? parseFloat(document.getElementById("in-targetTons").value) : 0) || 0;
     const currentRailLen = dims.railLen;
     const capacityPerCurrentSet = ratio * currentRailLen;
     let setsNeeded = null;
@@ -1827,7 +1838,9 @@
   }
 
   function applyInvMode(){
-    ['s03','s04'].forEach(k => { const el = document.querySelector('#view-calc section[data-print-section="' + k + '"]'); if (el) el.classList.toggle('inv-off', !invOn); });
+    ['s03','s04','s07'].forEach(k => { const el = document.querySelector('#view-calc section[data-print-section="' + k + '"]'); if (el) el.hidden = !invOn; });
+    ['s04','s07'].forEach(k => { const b = document.querySelector('#calc-tabs button[data-tab="' + k + '"]'); if (b) b.hidden = !invOn; });
+    if (!invOn && (calcTabKey === 's04' || calcTabKey === 's07')) setCalcTab('');
   }
 
   function recompute(){
@@ -2283,14 +2296,15 @@
   }
   function platNum(v, d){ const n = parseFloat(v); return isFinite(n) ? n : d; }
 
-  function platCompute(dims){
-    const len = platNum(platState.len, 0), wid = platNum(platState.wid, 0), thk = platNum(platState.thk, 0);
-    const per = Math.max(0, Math.round(platNum(platState.per, 0)));
+  function platCompute(dims, st){
+    st = st || platState;
+    const len = platNum(st.len, 0), wid = platNum(st.wid, 0), thk = platNum(st.thk, 0);
+    const per = Math.max(0, Math.round(platNum(st.per, 0)));
     const autoPos = dims.plate ? plateSiteList(dims).filter(st => st.on).length : dims.colCount;
-    const manualPos = String(platState.pos).trim() !== "" && isFinite(parseFloat(platState.pos));
-    const positions = manualPos ? Math.max(0, Math.round(parseFloat(platState.pos))) : autoPos;
-    const slen = platNum(platState.slen, 0), swid = platNum(platState.swid, 0);
-    const pn = platNum(platState.pn, 0), ps = platNum(platState.ps, 0);
+    const manualPos = String(st.pos).trim() !== "" && isFinite(parseFloat(st.pos));
+    const positions = manualPos ? Math.max(0, Math.round(parseFloat(st.pos))) : autoPos;
+    const slen = platNum(st.slen, 0), swid = platNum(st.swid, 0);
+    const pn = platNum(st.pn, 0), ps = platNum(st.ps, 0);
     const pieces = positions * per;
     const unitKg = len * wid * thk / 1000 * PLATE_DENSITY;
     const needKg = pieces * unitKg;
@@ -2412,7 +2426,7 @@
       kv(dims.colCount + " 支 × " + fmt(dims.colLen) + " m", "立柱") +
       kv(dims.hasBrace ? fmt(dims.braceLen) + " m × " + dims.colCount : "不含", "斜撐") +
       kv(dims.hasReinforce ? "含" : "不含", "中間補強地枕") + "</div>";
-    h += "<div class='rep-sec'>預估結果（不含庫存）</div><div class='rep-kv'>" +
+    h += "<div class='rep-sec'>預估結果</div><div class='rep-kv'>" +
       kv(fmt(bomTotal) + " m", "型鋼需求總長") +
       kv(done.length ? ordBars + " 支／" + fmtM(ordLen) + " m" : "—", "型鋼叫貨（選定方案）") +
       kv(pl.valid && pl.perSheet > 0 ? pl.pieces + " 片／" + pl.sheets + " 張" : "—", "鐵板加強板（片／標準板張數）") +
@@ -2429,8 +2443,7 @@
         "<li>共 " + pl.pieces + " 片，標準板 " + fmt(pl.slen) + "×" + fmt(pl.swid) + " m 每張切 " + pl.perSheet + " 片，需 " + pl.sheets + " 張（叫料 " + fmt(pl.buyKg) + " kg）</li>" +
         "<li>金額：正常品 " + fmt(pl.costN) + " 元／廢棄品 " + fmt(pl.costS) + " 元</li></ul>";
     }
-    h += "<div class='rep-sec'>庫存比對</div><p style='margin:4px 0 0;font-size:13px;'>" +
-      (invOn ? "已代入目前庫存：建議採購 " + mt.totalPurchase + " 支（" + dims.purchaseLen + "M／支），詳見後面的供需比對。" : "未代入庫存（純需求預估）。") + "</p>";
+    if (invOn) h += "<div class='rep-sec'>庫存比對</div><p style='margin:4px 0 0;font-size:13px;'>已代入目前庫存：建議採購 " + mt.totalPurchase + " 支（" + dims.purchaseLen + "M／支），詳見後面的供需比對。</p>";
     host.innerHTML = h;
   }
 
@@ -2520,10 +2533,21 @@
       projects = Array.isArray(parsed) ? parsed : [];
     } catch(e){ projects = []; } // private browsing / storage disabled — start empty, saving will just no-op
   }
+  let saveFailWarned = false;
   function saveProjectsToStorage(){
     try { localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects)); return true; }
-    catch(e){ return false; } // quota exceeded or storage disabled — keep working in-memory for this session
+    catch(e){ // quota exceeded or storage disabled — keep working in-memory for this session
+      if (!saveFailWarned){
+        saveFailWarned = true;
+        alert("⚠️ 瀏覽器儲存空間不足或被停用，專案這次沒有存進瀏覽器，重新整理後會消失！\n請先到「歷史專案」按「匯出專案檔」備份，並刪除不需要的專案照片來釋出空間。");
+      }
+      return false;
+    }
   }
+  // ---- 回收桶：刪除的專案先放這裡，可還原 ----
+  const TRASH_KEY = "steelCalcTrash_v1";
+  function trashLoad(){ try { const a = JSON.parse(localStorage.getItem(TRASH_KEY) || "[]"); return Array.isArray(a) ? a : []; } catch(e){ return []; } }
+  function trashSave(list){ try { localStorage.setItem(TRASH_KEY, JSON.stringify(list)); return true; } catch(e){ return false; } }
 
   function collectProjectInputs(){
     return {
@@ -3160,21 +3184,60 @@
   }
 
   async function deleteProject(id){
+    const proj = findProject(id);
+    if (!proj) return;
+    if (!confirm("確定要刪除專案「" + proj.name + "」嗎？\n刪除後會先放進「回收桶」，可以還原。")) return;
+    const trash = trashLoad();
+    trash.unshift({ project: JSON.parse(JSON.stringify(proj)), deletedAt: new Date().toISOString() });
+    trashSave(trash.slice(0, 30));
     compareChecked.delete(id);
     if (id === currentProjectId){ currentProjectId = null; try{ localStorage.removeItem(CUR_KEY); }catch(e){} }
     if (cloudMode){
-      const proj = findProject(id);
       try { await cloudDb.doc("projects/"+id).delete(); }
       catch(e){ alert("刪除專案失敗（雲端）：" + (e && e.message ? e.message : e)); return; }
-      // best-effort cleanup of this project's uploaded photos — a failed delete here just leaves an orphaned asset, harmless
-      if (proj && Array.isArray(proj.photos)){
-        proj.photos.forEach(ph => { if (ph.assetId) cloudAssets.delete(ph.assetId).catch(()=>{}); });
-      }
-      return;
+      paintTrashCount();
+      return; // photo files are kept (so a restore keeps its photos)
     }
     projects = projects.filter(p => p.id !== id);
     saveProjectsToStorage();
     paintProjects();
+    paintTrashCount();
+  }
+  function paintTrashCount(){
+    const b = document.getElementById("btn-trash"); if (!b) return;
+    const n = trashLoad().length;
+    b.textContent = "回收桶（" + n + "）";
+  }
+  function openTrash(){
+    const list = trashLoad(), host = document.getElementById("trash-list");
+    if (!list.length) host.innerHTML = "<p class='callout'>回收桶是空的。</p>";
+    else {
+      host.innerHTML = "";
+      list.forEach((t, i) => {
+        const p = t.project || {};
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);";
+        row.innerHTML = "<div style='flex:1;'><b>" + escHtml(p.name || "（無名稱）") + "</b>" + (p.location ? "（" + escHtml(p.location) + "）" : "") +
+          "<br><span style='font-size:12px;color:var(--ink-soft);'>刪除時間：" + fmtDate(t.deletedAt) + "</span></div>";
+        const btn = document.createElement("button"); btn.type = "button"; btn.className = "small primary"; btn.textContent = "還原";
+        btn.addEventListener("click", () => restoreFromTrash(i));
+        row.appendChild(btn); host.appendChild(row);
+      });
+    }
+    document.getElementById("trash-overlay").hidden = false;
+  }
+  async function restoreFromTrash(i){
+    const list = trashLoad(), t = list[i];
+    if (!t || !t.project) return;
+    const p = t.project;
+    if (cloudMode){
+      const data = { name:p.name, location:p.location || "", savedAt:p.savedAt, inputs:p.inputs, summary:p.summary || {}, photos:Array.isArray(p.photos) ? p.photos : [] };
+      try { await cloudDb.collection("projects").add(data); } catch(e){ alert("還原失敗（雲端）：" + (e && e.message ? e.message : e)); return; }
+    } else {
+      if (findProject(p.id)) p.id = "p" + Date.now() + "_" + Math.random().toString(36).slice(2,7);
+      projects.push(p); saveProjectsToStorage(); paintProjects();
+    }
+    list.splice(i, 1); trashSave(list); paintTrashCount(); openTrash();
   }
 
   function populateLocationFilter(){
@@ -3194,6 +3257,7 @@
     host.innerHTML = "";
 
     paintProjBar();
+    { const ff = document.getElementById('filter-status'); if (ff && ff.parentElement) ff.parentElement.hidden = !projects.some(q => hasInv(q.summary)); }
     if (projects.length === 0){
       host.innerHTML = "<div class='project-card-empty'>尚未存檔——填好①②③設定後，在上方輸入專案名稱並按「存成專案」</div>";
       document.getElementById("filter-count").textContent = "";
@@ -3244,7 +3308,7 @@
 
       const tags = document.createElement("div");
       tags.className = "pc-tags";
-      tags.innerHTML = (hasInv(s) ? "<span class='pill "+(s.status||"")+"'>"+(STATUS_LABEL[s.status]||"—")+"</span>" : "<span class='gp-meta'>未代入庫存</span>") +
+      tags.innerHTML = (hasInv(s) ? "<span class='pill "+(s.status||"")+"'>"+(STATUS_LABEL[s.status]||"—")+"</span>" : "") +
         (photoCount > 0 ? "<span class='gp-meta'>📷 "+photoCount+" 張照片</span>" : "");
       card.appendChild(tags);
 
@@ -3297,10 +3361,11 @@
       ["含斜撐", p => p.summary.hasBrace !== false ? "是" : "否"],
       ["BOM合計(m)", p => fmtOrDash(p.summary.bomTotal)],
       ["需求總長(m)", p => fmtOrDash(p.summary.totalDemand)],
+      ...(selected.some(q => hasInv(q.summary)) ? [
       ["總缺口(m)", p => hasInv(p.summary) ? fmtOrDash(p.summary.totalShort) : "—"],
       ["建議採購支數", p => hasInv(p.summary) && p.summary.totalPurchase!=null ? p.summary.totalPurchase : "—"],
-      ["供需狀態", p => hasInv(p.summary) ? (STATUS_LABEL[p.summary.status]||"—") : "未代入庫存"],
-      ["可配組數", p => hasInv(p.summary) && p.summary.maxSets!=null ? p.summary.maxSets : "—"],
+      ["供需狀態", p => hasInv(p.summary) ? (STATUS_LABEL[p.summary.status]||"—") : "—"],
+      ["可配組數", p => hasInv(p.summary) && p.summary.maxSets!=null ? p.summary.maxSets : "—"]] : []),
       ["儲存時間", p => fmtDate(p.savedAt)]
     ];
     let html = "<thead><tr><th>項目</th>" + selected.map(p => "<th>"+escHtml(p.name)+"</th>").join("") + "</tr></thead><tbody>";
@@ -3717,7 +3782,7 @@
     if (hasInv(s)){
       items.push(["總缺口(m)", fmtOrDash(s.totalShort)], ["建議採購支數", s.totalPurchase!=null ? s.totalPurchase : "—"],
         ["供需狀態", STATUS_LABEL[s.status]||"—"], ["可配組數", s.maxSets!=null ? s.maxSets : "—"]);
-    } else items.push(["庫存比對", "未代入"]);
+    }
     let html = "<div class='detail-grid'>";
     items.forEach(it => { html += "<div class='dg-item'><div class='dg-l'>"+it[0]+"</div><div class='dg-v'>"+it[1]+"</div></div>"; });
     html += "</div>";
@@ -3770,6 +3835,82 @@
     host.appendChild(buildPhotoGridDOM(p, true));
   }
 
+  // ---- 專案完整內容（由儲存的 inputs 即時推算：不用庫存）----
+  function projectEffective(p){
+    const inp = p.inputs || {};
+    const dims = dimsFromProjectInputs(inp);
+    const st = (inp.plate && typeof inp.plate === "object") ? platNormalize(inp.plate) : Object.assign({}, platState, { sites: {} });
+    dims.plate = { len: platNum(st.len,1) || 1, wid: platNum(st.wid,1) || 1, sites: st.sites || {} };
+    const bom = computeBOM(dims);
+    const pl = platCompute(dims, st);
+    const kt = (inp.knownTons !== undefined && inp.knownTons !== "") ? (parseFloat(inp.knownTons) || 0) : (parseFloat(document.getElementById("in-knownTons").value) || 0);
+    const kl = (inp.knownLen !== undefined && inp.knownLen !== "") ? (parseFloat(inp.knownLen) || 0) : (parseFloat(document.getElementById("in-knownLen").value) || 0);
+    const tn = computeTonnageFrom(dims, kt, kl);
+    const o = inp.order || {};
+    const lens = parseOrderLens(o.lens || "8-16");
+    const rows = (o.src === "manual" && Array.isArray(o.manual)) ? o.manual : bom.map(r => ({ label:r.label, spec:r.spec, len:r.unitLen, qty:r.qty }));
+    const groups = lens.length ? ordGroupsFromRows(rows) : [];
+    const ord = groups.map(g => {
+      if (g.pieces.length > 600) return { g:g, error:"切段數量太多（超過600段）" };
+      const b = ordBuildOptions(g.pieces, lens);
+      if (b.error) return { g:g, error:b.error };
+      const wanted = o.selected && o.selected[g.key];
+      return { g:g, sel: b.options.find(x => x.key === wanted) || b.options[0] };
+    });
+    let bomTotal = 0; bom.forEach(r => { bomTotal += r.subtotal; });
+    let ordBars = 0, ordLen = 0;
+    ord.forEach(r => { if (r.sel) r.sel.parts.forEach(q => { ordBars += q.count; ordLen += q.len * q.count; }); });
+    return { dims:dims, bom:bom, bomTotal:bomTotal, pl:pl, tn:tn, kt:kt, kl:kl, ord:ord, ordBars:ordBars, ordLen:ordLen, lensText:(o.lens || "8-16") };
+  }
+  function plateGroupText(dims){
+    const on = plateSiteList(dims).filter(x => x.on);
+    return SITE_GROUPS.map(g => [g[1], on.filter(x => x.grp === g[0]).length]).filter(x => x[1] > 0).map(x => x[0] + " " + x[1]).join("、") || "無";
+  }
+  function buildProjectSectionsHTML(e, stageHostId){
+    const kv = (v, l) => "<div><b>" + v + "</b><span>" + l + "</span></div>";
+    const pl = e.pl, tn = e.tn;
+    const plOk = pl.valid && pl.perSheet > 0;
+    let h = "<div class='rep-kv' style='margin:4px 0 10px;'>" +
+      kv(fmt(e.bomTotal) + " m", "型鋼需求總長") +
+      kv(e.ordBars ? e.ordBars + " 支／" + fmtM(e.ordLen) + " m" : "—", "型鋼叫貨（採用方案）") +
+      kv(plOk ? pl.pieces + " 片／" + pl.sheets + " 張" : "—", "鐵板加強板（片／標準板張數）") +
+      kv(tn.capacityPerCurrentSet > 0 ? fmt(tn.capacityPerCurrentSet) + " 噸" : "—", "可放噸數") + "</div>";
+    h += "<h4 class='detail-section-title'>組立圖（粉紅色＝加強板）</h4><div class='stagecard'><div id='" + stageHostId + "'></div></div>";
+    // 叫貨
+    h += "<h4 class='detail-section-title'>叫貨資訊（可叫貨長度 " + escHtml(e.lensText) + " m）</h4>";
+    if (!e.ord.length) h += "<p class='callout'>沒有可計算的叫貨需求。</p>";
+    else {
+      h += "<div class='tablewrap'><table><thead><tr><th>規格</th><th class='num'>需求(m)</th><th>採用方案</th><th>叫貨組合</th><th class='num'>支數</th><th class='num'>叫貨總長(m)</th><th class='num'>餘料(m)</th><th class='num'>利用率</th></tr></thead><tbody>";
+      let tb = 0, tl = 0, tw = 0;
+      e.ord.forEach(r => {
+        const spec = escHtml(r.g.spec || "（未填規格）");
+        if (!r.sel){ h += "<tr><td>" + spec + "</td><td class='num'>" + fmtM(r.g.demand) + "</td><td colspan='6'>" + escHtml(r.error || "—") + "</td></tr>"; return; }
+        tb += r.sel.bars; tl += r.sel.total; tw += r.sel.waste;
+        h += "<tr><td>" + spec + "</td><td class='num'>" + fmtM(r.g.demand) + "</td><td>" + ORD_KIND_LABEL[r.sel.kind] + "</td><td class='combo'>" + ordComboText(r.sel.parts) + "</td><td class='num'>" + r.sel.bars + "</td><td class='num'>" + fmtM(r.sel.total) + "</td><td class='num'>" + fmtM(r.sel.waste) + "</td><td class='num'>" + (Math.round(r.sel.util * 1000) / 10) + "%</td></tr>";
+      });
+      h += "<tr class='total'><td colspan='4'>合計</td><td class='num'>" + tb + "</td><td class='num'>" + fmtM(tl) + "</td><td class='num'>" + fmtM(tw) + "</td><td></td></tr></tbody></table></div>";
+    }
+    // 鐵板
+    h += "<h4 class='detail-section-title'>鐵板（加強板）</h4>";
+    if (!plOk) h += "<p class='callout'>尚未設定完整的加強板／標準鋼板尺寸。</p>";
+    else {
+      h += "<div class='tablewrap'><table><tbody>" +
+        "<tr><td>加強板尺寸</td><td>" + fmt(pl.len) + " × " + fmt(pl.wid) + " m ・ 厚 " + fmt(pl.thk) + " mm ・ 單片 " + fmt(pl.unitKg) + " kg</td></tr>" +
+        "<tr><td>放置位置</td><td>" + escHtml(plateGroupText(e.dims)) + "（共 " + pl.positions + " 處 × " + pl.per + " 片）</td></tr>" +
+        "<tr><td>需要片數</td><td><b>" + pl.pieces + " 片</b>（淨重 " + fmt(pl.needKg) + " kg）</td></tr>" +
+        "<tr><td>標準鋼板</td><td>" + fmt(pl.slen) + " × " + fmt(pl.swid) + " m ・ 每張切 " + pl.perSheet + " 片 → 需 <b>" + pl.sheets + " 張</b>（叫料 " + fmt(pl.buyKg) + " kg，多 " + pl.spare + " 片）</td></tr>" +
+        "<tr><td>金額</td><td>正常品 " + fmt(pl.costN) + " 元（" + fmt(pl.pn) + " 元/kg） ・ 廢棄品 " + fmt(pl.costS) + " 元（" + fmt(pl.ps) + " 元/kg）</td></tr>" +
+        "</tbody></table></div>";
+    }
+    // 噸數
+    h += "<h4 class='detail-section-title'>可放噸數</h4>";
+    h += tn.ratio > 0
+      ? "<p style='font-size:13.5px;line-height:1.7;margin:4px 0 0;'>換算基準：已知 " + fmt(e.kt) + " 噸 ÷ 全長合計 " + fmt(e.kl) + " m ＝ " + fmt(tn.ratio) + " 噸／m。本專案全長 " + fmt(e.dims.railLen) + " m → 可放約 <b>" + fmt(tn.capacityPerCurrentSet) + " 噸</b>。<br><span style='color:var(--ink-soft);font-size:12px;'>（簡化比例推算，僅供初步規劃，不是結構計算。）</span></p>"
+      : "<p class='callout'>尚未設定噸位換算基準（③已知總噸數與全長合計）。</p>";
+    h += "<h4 class='detail-section-title'>型鋼需求明細（BOM）</h4>" + buildDetailBOMTable(e.bom);
+    return h;
+  }
+
   function openProjectDetail(p){
     currentDetailProjectId = p.id;
     const s = p.summary || {};
@@ -3777,18 +3918,17 @@
     document.getElementById("project-detail-sub").textContent =
       "儲存時間：" + fmtDate(p.savedAt) + (p.location ? "　・　地點：" + p.location : "");
     const body = document.getElementById("project-detail-body");
-    if (!s.bom){
-      body.innerHTML = "<p class='callout'>這個專案是舊版格式存檔，沒有完整的明細快照（僅有彙總數字）。可以按「載入」把設定帶回計算頁，畫面上的明細即會更新。</p>" + buildDetailInfoGrid(p, s);
-    } else if (!hasInv(s) || !s.match || !s.groupcap){
-      body.innerHTML = buildDetailInfoGrid(p, s) +
-        "<h4 class='detail-section-title'>型鋼需求明細（BOM）</h4>" + buildDetailBOMTable(s.bom) +
-        "<p class='callout'>這個專案沒有代入庫存，所以沒有供需比對。開啟編輯後勾選「代入庫存比對」即可。</p>";
+    if (!p.inputs){
+      body.innerHTML = "<p class='callout'>這個專案是舊版格式存檔，沒有輸入資料，無法顯示完整內容。</p>" + buildDetailInfoGrid(p, s);
     } else {
-      body.innerHTML =
-        buildDetailInfoGrid(p, s) +
-        "<h4 class='detail-section-title'>型鋼需求明細（BOM）</h4>" + buildDetailBOMTable(s.bom) +
-        "<h4 class='detail-section-title'>供需比對與採購建議</h4>" + buildDetailMatchTable(s.match) +
-        "<h4 class='detail-section-title'>依目前庫存可配出幾組</h4>" + buildDetailGroupCapTable(s.groupcap);
+      const e = projectEffective(p);
+      body.innerHTML = buildDetailInfoGrid(p, s) + buildProjectSectionsHTML(e, "project-detail-stage-host");
+      try { renderStage(e.dims, document.getElementById("project-detail-stage-host")); } catch(err){ /* diagram is optional */ }
+      if (hasInv(s) && s.match && s.groupcap){
+        body.insertAdjacentHTML("beforeend",
+          "<h4 class='detail-section-title'>供需比對與採購建議（儲存時代入庫存）</h4>" + buildDetailMatchTable(s.match) +
+          "<h4 class='detail-section-title'>依庫存可配出幾組</h4>" + buildDetailGroupCapTable(s.groupcap));
+      }
     }
     const photoSection = document.createElement("div");
     photoSection.innerHTML = "<h4 class='detail-section-title'>組立照片</h4>";
@@ -3830,13 +3970,30 @@
   async function exportProjectExcel(p){
     try{
       const s = p.summary || {};
-      if (!s.bom){ alert("這個專案沒有完整的明細快照，無法匯出。"); return; }
+      if (!p.inputs){ alert("這個專案沒有輸入資料，無法匯出。"); return; }
       if (typeof XLSX === "undefined"){
         alert("匯出Excel需要先載入線上程式庫，但目前偵測不到網路連線（或網路阻擋了外部資源）。請確認網路連線後重新整理頁面再試一次；也可以改用「列印」直接印出或另存PDF。");
         return;
       }
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaBOM(s.bom)), "型鋼需求明細BOM");
+      const e = projectEffective(p), pl = e.pl, tn = e.tn;
+      const sum = [["專案", p.name], ["地點", p.location || ""], ["儲存時間", fmtDate(p.savedAt)], [],
+        ["全長(m)", e.dims.railLen], ["寬度(m)", e.dims.tieLen], ["立柱支數", e.dims.colCount], ["立柱高度(m)", e.dims.colLen], ["斜撐單長(m)", e.dims.braceLen],
+        [], ["型鋼需求總長(m)", +e.bomTotal.toFixed(2)], ["叫貨支數", e.ordBars], ["叫貨總長(m)", e.ordLen / 100],
+        ["鐵板片數", pl.pieces], ["標準板張數", pl.sheets], ["鐵板叫料(kg)", +pl.buyKg.toFixed(1)],
+        ["可放噸數(噸)", +tn.capacityPerCurrentSet.toFixed(2)], ["換算基準(噸/m)", +tn.ratio.toFixed(3)]];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), "專案摘要");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaBOM(e.bom)), "型鋼需求明細BOM");
+      const ordRows = [["規格","需求(m)","採用方案","叫貨組合","支數","叫貨總長(m)","餘料(m)","利用率"]];
+      e.ord.forEach(r => {
+        if (!r.sel){ ordRows.push([r.g.spec || "", r.g.demand / 100, r.error || ""]); return; }
+        ordRows.push([r.g.spec || "", r.g.demand / 100, ORD_KIND_LABEL[r.sel.kind], r.sel.parts.map(q => (q.len / 100) + "M×" + q.count).join(" + "), r.sel.bars, r.sel.total / 100, r.sel.waste / 100, Math.round(r.sel.util * 1000) / 10 + "%"]);
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ordRows), "叫貨資訊");
+      if (pl.valid) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+        ["加強板長(m)", pl.len], ["加強板寬(m)", pl.wid], ["板厚(mm)", pl.thk], ["放置位置", plateGroupText(e.dims)], ["片數", pl.pieces], ["單片重(kg)", +pl.unitKg.toFixed(2)],
+        ["標準板", pl.slen + "×" + pl.swid + " m"], ["每張片數", pl.perSheet], ["張數", pl.sheets], ["叫料重(kg)", +pl.buyKg.toFixed(1)],
+        ["金額-正常品(元)", Math.round(pl.costN)], ["金額-廢棄品(元)", Math.round(pl.costS)]]), "鐵板");
       if (hasInv(s) && s.match) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaMatch(s.match)), "供需比對與採購建議");
       if (hasInv(s) && s.groupcap) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaGroupCap(s.groupcap)), "可配組數估算");
       const now = new Date();
@@ -3913,16 +4070,16 @@
 
   async function printProjectSnapshot(p){
     const s = p.summary || {};
-    if (!s.bom){ alert("這個專案沒有完整的明細快照，請先用「載入」把設定帶回計算頁再列印。"); return; }
-    const dims = dimsFromProjectInputs(p.inputs);
+    if (!p.inputs){ alert("這個專案沒有輸入資料，請先用「開啟編輯」帶回計算頁再列印。"); return; }
+    const e = projectEffective(p);
     const root = document.getElementById("project-print-root");
     root.innerHTML =
       "<div class='print-proj-head'><h2>"+escHtml(p.name)+"</h2>" +
       (p.location ? "<p>地點："+escHtml(p.location)+"</p>" : "") +
       "<p>儲存時間："+fmtDate(p.savedAt)+"</p></div>" +
-      "<h4 class='detail-section-title'>組立示意圖</h4><div class='stagecard'><div id='project-print-stage-host'></div></div>" +
-      "<h4 class='detail-section-title'>型鋼需求明細（BOM）</h4>" + buildDetailBOMTable(s.bom);
-    renderStage(dims, document.getElementById("project-print-stage-host"));
+      buildDetailInfoGrid(p, s) + buildProjectSectionsHTML(e, "project-print-stage-host") +
+      (hasInv(s) && s.match ? "<h4 class='detail-section-title'>供需比對與採購建議</h4>" + buildDetailMatchTable(s.match) : "");
+    renderStage(e.dims, document.getElementById("project-print-stage-host"));
 
     if (cloudDownloads){
       // No live <input> fields in this snapshot (all built from strings +
@@ -3998,7 +4155,7 @@
   const PRINT_PREFS_KEY = "steelCalcPrintSections_v1";
 
   function collectPrintableSections(){
-    return Array.from(document.querySelectorAll("[data-print-section]")).filter(el => !el.closest("[hidden]"));
+    return Array.from(document.querySelectorAll("[data-print-section]")).filter(el => !el.closest("[hidden]") && !(!invOn && el.id === "app-footer"));
   }
   function loadPrintPrefs(){
     try { const raw = localStorage.getItem(PRINT_PREFS_KEY); return raw ? JSON.parse(raw) : {}; }
@@ -4279,6 +4436,10 @@
   $id("np-name").addEventListener("keydown", e => { if (e.key === "Enter") submitNewProject(); });
   $id("np-cancel").addEventListener("click", () => { $id("np-overlay").hidden = true; });
   $id("np-x").addEventListener("click", () => { $id("np-overlay").hidden = true; });
+  $id("btn-trash").addEventListener("click", openTrash);
+  $id("trash-x").addEventListener("click", () => { $id("trash-overlay").hidden = true; });
+  $id("trash-close").addEventListener("click", () => { $id("trash-overlay").hidden = true; });
+  paintTrashCount();
   $id("pb-useinv").addEventListener("change", e => { invOn = e.target.checked; recompute(); });
   $id("pb-help").addEventListener("click", () => { $id("help-overlay").hidden = false; });
   $id("help-ok").addEventListener("click", () => { $id("help-overlay").hidden = true; });
