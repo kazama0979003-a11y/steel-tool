@@ -1019,6 +1019,7 @@
           <button class="ghost" id="btn-export-projects" type="button">匯出專案檔</button>
           <button class="ghost" id="btn-import-projects" type="button">匯入專案檔</button>
           <button class="ghost" id="btn-trash" type="button">回收桶（0）</button>
+          <button class="ghost" id="btn-dedupe" type="button">清除重複專案</button>
           <input type="file" id="file-import-projects" accept="application/json" style="display:none;">
         </div>
       </div>
@@ -2670,6 +2671,7 @@
   }
 
   function seedDefaultProjectsIfEmpty(){
+    if (normalizeSharedUrl(DEFAULT_SHARED_DB_URL)) return; // 共用模式：範例專案只存在共用資料庫，不再在每台電腦本機重建（否則每次開啟都會搬一份進去）
     let alreadySeeded = false;
     try { alreadySeeded = localStorage.getItem(PROJECTS_SEEDED_KEY) === "1"; } catch(e){ /* storage disabled — just seed in-memory each time, harmless */ }
     if (alreadySeeded) return;
@@ -3047,6 +3049,21 @@
 
   // 第一次連上共用資料庫時，自動把「這台電腦瀏覽器裡原本存的專案（含照片）」搬進去。
   // 本機資料不會被刪除；每個專案只搬一次（記錄在 MIGRATED_KEY），內容相同的專案不重複建立。
+  // 把專案內容統一成可比較的格式（Firebase 會把陣列變物件、丟掉空陣列／null，存進去再讀回來
+  // 會跟本機原樣不同——所以比對前兩邊都先經過這個轉換）。
+  function canonValue(v){
+    if (v === null || v === undefined) return undefined;
+    if (Array.isArray(v)) v = v.reduce((o, x, i) => { o[i] = x; return o; }, {});
+    if (typeof v === "object"){
+      const out = {};
+      Object.keys(v).sort().forEach(k => { const c = canonValue(v[k]); if (c !== undefined) out[k] = c; });
+      return Object.keys(out).length ? out : undefined;
+    }
+    if (v === "") return undefined;
+    return typeof v === "number" ? String(v) : v;
+  }
+  function canonSig(p){ return (p.name || "") + "|" + JSON.stringify(canonValue(p.inputs || {}) || {}); }
+
   const MIGRATED_KEY = "steelCalcMigratedToShared_v1";
   let migratingLocal = false;
   async function migrateLocalToShared(){
@@ -3061,8 +3078,11 @@
     migratingLocal = true;
     let added = 0, skipped = 0, photoCount = 0, photoFails = 0;
     try {
+      let lease = { acquired: true };
+      try { lease = await cloudDb.doc("meta/migrate").acquire({ holder: CLOUD_HOLDER, ttlMs: 90000 }); } catch(e){ /* ignore */ }
+      if (!lease.acquired) return; // 另一個分頁／同事正在搬，這次不搬（下次連線會再檢查）
       const cur = await cloudDb.collection("projects").get();
-      const sigA = d => (d.name || "") + "|" + JSON.stringify(d.inputs || {});
+      const sigA = d => canonSig(d);
       const sigB = d => (d.name || "") + "|" + (d.savedAt || "");
       const have = new Set();
       cur.docs.forEach(d => { const v = d.data() || {}; have.add(sigA(v)); have.add(sigB(v)); });
@@ -3510,6 +3530,42 @@
     reader.readAsText(file);
   }
 
+
+  // ---- 清除重複專案：名稱與內容完全相同的只留一個（有照片的優先，照片會合併到保留的那個）----
+  async function dedupeProjects(){
+    const groups = new Map();
+    projects.forEach(p => { const k = canonSig(p); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(p); });
+    const dupGroups = Array.from(groups.values()).filter(g => g.length > 1);
+    const extra = dupGroups.reduce((n, g) => n + g.length - 1, 0);
+    if (!extra){ alert("沒有重複的專案。"); return; }
+    if (!confirm("找到 " + extra + " 個重複專案（名稱與內容完全相同）。\n每組只保留 1 個（有照片的優先，照片會合併），其餘刪除。\n確定要清除嗎？")) return;
+    let removed = 0;
+    for (const g of dupGroups){
+      g.sort((a, b) => ((b.photos || []).length - (a.photos || []).length) || String(a.savedAt).localeCompare(String(b.savedAt)));
+      const keep = g[0];
+      const seen = new Set(), merged = [];
+      g.forEach(p => (p.photos || []).forEach(ph => {
+        const key = ph.assetId || ph.id;
+        if (key && !seen.has(key)){ seen.add(key); merged.push(ph); }
+      }));
+      if (cloudMode){
+        try {
+          if (merged.length !== (keep.photos || []).length){
+            await cloudDb.doc("projects/" + keep.id).update({ photos: merged.map(ph => ({ id: ph.id, assetId: ph.assetId, addedAt: ph.addedAt })) });
+          }
+          for (const p of g.slice(1)){ await cloudDb.doc("projects/" + p.id).delete(); removed++; }
+        } catch(e){ alert("清除失敗（雲端）：" + (e && e.message ? e.message : e)); return; }
+      } else {
+        keep.photos = merged;
+        const drop = new Set(g.slice(1).map(p => p.id));
+        projects = projects.filter(p => !drop.has(p.id)); removed += drop.size;
+        saveProjectsToStorage();
+      }
+    }
+    if (!cloudMode){ paintProjects(); updateLandingCounts(); }
+    alert("已清除 " + removed + " 個重複專案。");
+  }
+  document.getElementById("btn-dedupe").addEventListener("click", dedupeProjects);
   document.getElementById("btn-save-project").addEventListener("click", saveProject);
   document.getElementById("btn-export-projects").addEventListener("click", exportProjectsFile);
   document.getElementById("btn-import-projects").addEventListener("click", () => document.getElementById("file-import-projects").click());
