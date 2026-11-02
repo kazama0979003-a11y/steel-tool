@@ -670,7 +670,18 @@
     #view-calc .main > section[data-print-section="s06o"]{max-height:calc(100vh - 96px);}
     #view-calc .side{max-height:calc(100vh - 70px);}
   }
+  .print-photos{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0;}
+  .print-photos img{width:calc(50% - 8px);border-radius:6px;break-inside:avoid;}
+  .ord-print-head{display:none;}
   @media print{
+    .ord-print-head{display:block !important;margin:0 0 10px;padding:0 0 8px;border-bottom:2px solid #333;font-size:14px;line-height:1.7;}
+    .ord-print-head b{font-size:18px;display:block;margin-bottom:2px;}
+    body.print-proj .wrap > *:not(#project-print-root){display:none !important;}
+    body.print-brief header.top, body.print-brief #projbar, body.print-brief #app-footer{display:none !important;}
+    section.ord-brief .section-sub, section.ord-brief .card, section.ord-brief #ord-result, section.ord-brief .btnbar{display:none !important;}
+    section.ord-brief .section-title{display:none !important;}
+    section.ord-brief #ord-summary h3{margin-top:0 !important;font-size:18px;}
+    section.ord-brief #ord-summary table{font-size:16px;}
     #view-calc .main > section.print-only{display:block !important;}
     .projbar{display:none !important;}
     .stg-zoom{display:none !important;}
@@ -678,7 +689,7 @@
     #view-calc .main{display:block !important;}
     #view-calc .main > section[data-print-section]{max-height:none !important;overflow:visible !important;}
     #view-calc .main > section.tab-off{display:block !important;}
-    .tabbar, .strip{display:none !important;}
+    .tabbar, #calc-strip{display:none !important;}
     .projbar, .side, .toolbar-export, .invtoolbar, #fatal-banner, .modal-overlay, .lightbox-overlay, #shared-db-panel{display:none !important;}
     .grid{grid-template-columns:1fr !important;}
     .inv-table th:last-child, .inv-table td:last-child{display:none !important;}
@@ -686,6 +697,7 @@
     .card, .stagecard, .tablewrap, .kpi{break-inside:avoid;}
     button{display:none !important;}
     .print-hidden{display:none !important;}
+    html body #view-calc .main > section[data-print-section].print-hidden, html body section[data-print-section].print-hidden, html body #view-calc .main > section[data-print-section][hidden]{display:none !important;} /* 要比 .print-only / .tab-off 的 display:block 更強，取消勾選的區塊才真的不印 */
     #project-print-root.print-active{display:block !important;}
     .step-group{animation:none !important; opacity:1 !important; transform:none !important;}
   }
@@ -898,7 +910,8 @@
         <p class="callout" id="tonnage-note" style="margin-top:10px;"></p>
       </section>
 
-      <section data-print-section="s06o" data-print-label="06 型鋼叫貨計算">
+      <section data-print-section="s06o" data-print-label="06 型鋼叫貨（只印長度與支數）">
+        <div class="ord-print-head" id="ord-print-head"></div>
         <h2 class="section-title"><span class="idx">06</span>型鋼叫貨計算</h2>
         <p class="section-sub">把需求拆成「每一段要切多長」，再用可叫貨的長度（例如 8～16M）算出叫貨組合與餘料——會實際排切割（一支料可以切出哪幾段），不是只拿總長去除。每個規格各算一組，可以自己選要採用哪個方案。</p>
         <div class="card">
@@ -1132,9 +1145,11 @@
       <p class="modal-sub">取消勾選的區塊不會出現在列印結果中，畫面上仍會正常顯示。</p>
       <div class="modal-body-scroll">
         <ul class="modal-checklist" id="print-checklist"></ul>
+        <label class="modal-extra" style="display:flex;gap:8px;align-items:center;margin:10px 2px 0;font-size:14px;"><input type="checkbox" id="print-ord-detail"> 叫貨：同時印出各規格的方案與切法明細（預設只印長度與支數）</label>
       </div>
       <div class="modal-actions">
         <button type="button" class="ghost" id="btn-print-cancel">取消</button>
+        <button type="button" class="ghost" id="btn-print-ord-only">只印叫貨</button>
         <button type="button" class="primary" id="btn-print-confirm">開始列印</button>
       </div>
     </div>
@@ -1148,6 +1163,7 @@
       <div class="modal-body-scroll" id="project-detail-body"></div>
       <div class="modal-actions">
         <button type="button" class="ghost" id="btn-detail-export-excel">匯出Excel（本專案）</button>
+        <button type="button" class="ghost" id="btn-detail-print-order">只印叫貨單</button>
         <button type="button" class="ghost" id="btn-detail-print">列印（完整專案報告）</button>
         <span class="spacer"></span>
         <button type="button" class="ghost" id="btn-detail-close">關閉</button>
@@ -3983,19 +3999,34 @@
     const on = plateSiteList(dims).filter(x => x.on);
     return SITE_GROUPS.map(g => [g[1], on.filter(x => x.grp === g[0]).length]).filter(x => x[1] > 0).map(x => x[0] + " " + x[1]).join("、") || "無";
   }
-  function buildProjectSectionsHTML(e, stageHostId){
+  // opts: true/false = 叫貨只印長度與支數；或 { brief:boolean, parts:Set|null }（parts 沒給＝全部）
+  function buildProjectSectionsHTML(e, stageHostId, opts){
+    const o = (opts && typeof opts === "object") ? opts : { brief: !!opts, parts: null };
+    const briefOrder = !!o.brief;
+    const want = k => !o.parts || o.parts.has(k);
     const kv = (v, l) => "<div><b>" + v + "</b><span>" + l + "</span></div>";
     const pl = e.pl, tn = e.tn;
     const plOk = pl.valid && pl.perSheet > 0;
-    let h = "<div class='rep-kv' style='margin:4px 0 10px;'>" +
+    let h = !want("info") ? "" : "<div class='rep-kv' style='margin:4px 0 10px;'>" +
       kv(fmt(e.bomTotal) + " m", "型鋼需求總長") +
       kv(e.ordBars ? e.ordBars + " 支／" + fmtM(e.ordLen) + " m" : "—", "型鋼叫貨（採用方案）") +
       kv(plOk ? pl.pieces + " 片／" + pl.sheets + " 張" : "—", "鐵板加強板（片／標準板張數）") +
       kv(tn.capacityPerCurrentSet > 0 ? fmt(tn.capacityPerCurrentSet) + " 噸" : "—", "可放噸數") + "</div>";
-    h += "<h4 class='detail-section-title'>組立圖（粉紅色＝加強板）</h4><div class='stagecard'><div id='" + stageHostId + "'></div></div>";
+    if (want("stage")) h += "<h4 class='detail-section-title'>組立圖（粉紅色＝加強板）</h4><div class='stagecard'><div id='" + stageHostId + "'></div></div>";
     // 叫貨
-    h += "<h4 class='detail-section-title'>叫貨資訊（可叫貨長度 " + escHtml(e.lensText) + " m）</h4>";
-    if (!e.ord.length) h += "<p class='callout'>沒有可計算的叫貨需求。</p>";
+    if (want("order")) h += "<h4 class='detail-section-title'>叫貨資訊（可叫貨長度 " + escHtml(e.lensText) + " m）</h4>";
+    if (!want("order")) { /* skip */ }
+    else if (!e.ord.length) h += "<p class='callout'>沒有可計算的叫貨需求。</p>";
+    else if (briefOrder){
+      let tb2 = 0, tl2 = 0, body2 = "";
+      e.ord.forEach(r => {
+        const spec = escHtml(r.g.spec || "（未填規格）");
+        if (!r.sel){ body2 += "<tr><td>" + spec + "</td><td colspan='3'>" + escHtml(r.error || "—") + "</td></tr>"; return; }
+        r.sel.parts.forEach(pt => { tb2 += pt.count; tl2 += pt.len * pt.count; body2 += "<tr><td>" + spec + "</td><td class='num'>" + fmtM(pt.len) + "</td><td class='num'>" + pt.count + "</td><td class='num'>" + fmtM(pt.len * pt.count) + "</td></tr>"; });
+      });
+      h += "<div class='tablewrap'><table><thead><tr><th>規格</th><th class='num'>長度(m)</th><th class='num'>叫貨支數</th><th class='num'>小計(m)</th></tr></thead><tbody>" + body2 +
+        "<tr class='total'><td colspan='2'>合計</td><td class='num'>" + tb2 + "</td><td class='num'>" + fmtM(tl2) + "</td></tr></tbody></table></div>";
+    }
     else {
       h += "<div class='tablewrap'><table><thead><tr><th>規格</th><th class='num'>需求(m)</th><th>採用方案</th><th>叫貨組合</th><th class='num'>支數</th><th class='num'>叫貨總長(m)</th><th class='num'>餘料(m)</th><th class='num'>利用率</th></tr></thead><tbody>";
       let tb = 0, tl = 0, tw = 0;
@@ -4008,8 +4039,9 @@
       h += "<tr class='total'><td colspan='4'>合計</td><td class='num'>" + tb + "</td><td class='num'>" + fmtM(tl) + "</td><td class='num'>" + fmtM(tw) + "</td><td></td></tr></tbody></table></div>";
     }
     // 鐵板
-    h += "<h4 class='detail-section-title'>鐵板（加強板）</h4>";
-    if (!plOk) h += "<p class='callout'>尚未設定完整的加強板／標準鋼板尺寸。</p>";
+    if (want("plate")) h += "<h4 class='detail-section-title'>鐵板（加強板）</h4>";
+    if (!want("plate")) { /* skip */ }
+    else if (!plOk) h += "<p class='callout'>尚未設定完整的加強板／標準鋼板尺寸。</p>";
     else {
       h += "<div class='tablewrap'><table><tbody>" +
         "<tr><td>加強板尺寸</td><td>" + fmt(pl.len) + " × " + fmt(pl.wid) + " m ・ 厚 " + fmt(pl.thk) + " mm ・ 單片 " + fmt(pl.unitKg) + " kg</td></tr>" +
@@ -4020,11 +4052,11 @@
         "</tbody></table></div>";
     }
     // 噸數
-    h += "<h4 class='detail-section-title'>可放噸數</h4>";
-    h += tn.ratio > 0
+    if (want("tonnage")) h += "<h4 class='detail-section-title'>可放噸數</h4>";
+    if (want("tonnage")) h += tn.ratio > 0
       ? "<p style='font-size:13.5px;line-height:1.7;margin:4px 0 0;'>換算基準：已知 " + fmt(e.kt) + " 噸 ÷ 全長合計 " + fmt(e.kl) + " m ＝ " + fmt(tn.baseRatio) + " 噸／m（寬 " + fmt(e.kw) + " m）" + (tn.knownWid > 0 ? "；本專案寬度 " + fmt(e.dims.tieLen) + " m，寬度係數 ×" + fmt(tn.widFactor) + " ＝ " + fmt(tn.ratio) + " 噸／m" : "") + "。本專案全長 " + fmt(e.dims.railLen) + " m → 可放約 <b>" + fmt(tn.capacityPerCurrentSet) + " 噸</b>。<br><span style='color:var(--ink-soft);font-size:12px;'>（簡化比例推算，僅供初步規劃，不是結構計算。）</span></p>"
       : "<p class='callout'>尚未設定噸位換算基準（③已知總噸數與全長合計）。</p>";
-    h += "<h4 class='detail-section-title'>型鋼需求明細（BOM）</h4>" + buildDetailBOMTable(e.bom);
+    if (want("bom")) h += "<h4 class='detail-section-title'>型鋼需求明細（BOM）</h4>" + buildDetailBOMTable(e.bom);
     return h;
   }
 
@@ -4084,6 +4116,38 @@
     };
   }
 
+  // 叫貨工作表：預設只有 規格／長度／支數／小計；detail=true 才附各規格的方案、切法、餘料
+  function orderSheetAoa(ordList, meta, detail){
+    const rows = [["型鋼叫貨單", meta.name], ["地點", meta.location || ""], ["尺寸", meta.dimsText], ["日期", meta.date], []];
+    if (!detail){
+      rows.push(["規格","長度(m)","叫貨支數","小計(m)"]);
+      let tb = 0, tl = 0;
+      ordList.forEach(r => {
+        const spec = r.g.spec || "（未填規格）";
+        if (!r.sel){ rows.push([spec, r.error || ""]); return; }
+        r.sel.parts.forEach(q => { tb += q.count; tl += q.len * q.count; rows.push([spec, q.len / 100, q.count, q.len * q.count / 100]); });
+      });
+      rows.push(["合計", "", tb, tl / 100]);
+    } else {
+      rows.push(["規格","需求(m)","採用方案","叫貨組合","支數","叫貨總長(m)","餘料(m)","利用率"]);
+      let tb = 0, tl = 0, tw = 0;
+      ordList.forEach(r => {
+        if (!r.sel){ rows.push([r.g.spec || "", r.g.demand / 100, r.error || ""]); return; }
+        tb += r.sel.bars; tl += r.sel.total; tw += r.sel.waste;
+        rows.push([r.g.spec || "", r.g.demand / 100, ORD_KIND_LABEL[r.sel.kind], r.sel.parts.map(q => (q.len / 100) + "M×" + q.count).join(" + "), r.sel.bars, r.sel.total / 100, r.sel.waste / 100, Math.round(r.sel.util * 1000) / 10 + "%"]);
+      });
+      rows.push(["合計", "", "", "", tb, tl / 100, tw / 100, ""]);
+    }
+    return rows;
+  }
+  function plateSheetAoa(pl, dims){
+    return [["加強板長(m)", pl.len], ["加強板寬(m)", pl.wid], ["板厚(mm)", pl.thk], ["放置位置", plateGroupText(dims)], ["片數", pl.pieces], ["單片重(kg)", +pl.unitKg.toFixed(2)],
+      ["標準板", pl.slen + "×" + pl.swid + " m"], ["每張片數", pl.perSheet], ["張數", pl.sheets], ["叫料重(kg)", +pl.buyKg.toFixed(1)],
+      ["金額-正常品(元)", Math.round(pl.costN)], ["金額-廢棄品(元)", Math.round(pl.costS)]];
+  }
+  function todayStamp(){ const n = new Date(); return n.getFullYear() + String(n.getMonth()+1).padStart(2,"0") + String(n.getDate()).padStart(2,"0"); }
+  function todayDash(){ const n = new Date(); return n.getFullYear() + "/" + String(n.getMonth()+1).padStart(2,"0") + "/" + String(n.getDate()).padStart(2,"0"); }
+
   async function exportProjectExcel(p){
     try{
       const s = p.summary || {};
@@ -4092,31 +4156,48 @@
         alert("匯出Excel需要先載入線上程式庫，但目前偵測不到網路連線（或網路阻擋了外部資源）。請確認網路連線後重新整理頁面再試一次；也可以改用「列印」直接印出或另存PDF。");
         return;
       }
+      const items = [
+        { key:"order", label:"叫貨（長度與支數）" },
+        { key:"bom", label:"型鋼需求明細（BOM）" },
+        { key:"plate", label:"鐵板與可放噸數" }
+      ];
+      if (hasInv(s) && (s.match || s.groupcap)) items.push({ key:"inv", label:"庫存比對（供需比對、可配組數）" });
+      const pick = await pickItems({
+        title:"選擇要匯出的內容", sub:"勾選的項目會各自成為 Excel 的工作表。",
+        items: items, prefKey:"steelCalcProjExport_v1", okLabel:"匯出 Excel",
+        extra:{ label:"叫貨：同時匯出各規格的方案與切法明細" },
+        quick:{ label:"只匯出叫貨", keys:["order"] }
+      });
+      if (!pick) return;
+      const k = pick.keys;
       const wb = XLSX.utils.book_new();
       const e = projectEffective(p), pl = e.pl, tn = e.tn;
-      const sum = [["專案", p.name], ["地點", p.location || ""], ["儲存時間", fmtDate(p.savedAt)], [],
-        ["全長(m)", e.dims.railLen], ["寬度(m)", e.dims.tieLen], ["立柱支數", e.dims.colCount], ["立柱高度(m)", e.dims.colLen], ["斜撐單長(m)", e.dims.braceLen],
-        [], ["型鋼需求總長(m)", +e.bomTotal.toFixed(2)], ["叫貨支數", e.ordBars], ["叫貨總長(m)", e.ordLen / 100],
-        ["鐵板片數", pl.pieces], ["標準板張數", pl.sheets], ["鐵板叫料(kg)", +pl.buyKg.toFixed(1)],
-        ["可放噸數(噸)", +tn.capacityPerCurrentSet.toFixed(2)], ["換算基準(噸/m)", +tn.baseRatio.toFixed(3)], ["寬度係數(本案寬÷已知寬)", +tn.widFactor.toFixed(3)]];
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), "專案摘要");
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaBOM(e.bom)), "型鋼需求明細BOM");
-      const ordRows = [["規格","需求(m)","採用方案","叫貨組合","支數","叫貨總長(m)","餘料(m)","利用率"]];
-      e.ord.forEach(r => {
-        if (!r.sel){ ordRows.push([r.g.spec || "", r.g.demand / 100, r.error || ""]); return; }
-        ordRows.push([r.g.spec || "", r.g.demand / 100, ORD_KIND_LABEL[r.sel.kind], r.sel.parts.map(q => (q.len / 100) + "M×" + q.count).join(" + "), r.sel.bars, r.sel.total / 100, r.sel.waste / 100, Math.round(r.sel.util * 1000) / 10 + "%"]);
-      });
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ordRows), "叫貨資訊");
-      if (pl.valid) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-        ["加強板長(m)", pl.len], ["加強板寬(m)", pl.wid], ["板厚(mm)", pl.thk], ["放置位置", plateGroupText(e.dims)], ["片數", pl.pieces], ["單片重(kg)", +pl.unitKg.toFixed(2)],
-        ["標準板", pl.slen + "×" + pl.swid + " m"], ["每張片數", pl.perSheet], ["張數", pl.sheets], ["叫料重(kg)", +pl.buyKg.toFixed(1)],
-        ["金額-正常品(元)", Math.round(pl.costN)], ["金額-廢棄品(元)", Math.round(pl.costS)]]), "鐵板");
-      if (hasInv(s) && s.match) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaMatch(s.match)), "供需比對與採購建議");
-      if (hasInv(s) && s.groupcap) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaGroupCap(s.groupcap)), "可配組數估算");
-      const now = new Date();
-      const stamp = now.getFullYear()+String(now.getMonth()+1).padStart(2,"0")+String(now.getDate()).padStart(2,"0");
+      if (!(k.size === 1 && k.has("order"))){
+        const sum = [["專案", p.name], ["地點", p.location || ""], ["儲存時間", fmtDate(p.savedAt)], [],
+          ["全長(m)", e.dims.railLen], ["寬度(m)", e.dims.tieLen], ["立柱支數", e.dims.colCount], ["立柱高度(m)", e.dims.colLen], ["斜撐單長(m)", e.dims.braceLen],
+          [], ["型鋼需求總長(m)", +e.bomTotal.toFixed(2)], ["叫貨支數", e.ordBars], ["叫貨總長(m)", e.ordLen / 100],
+          ["鐵板片數", pl.pieces], ["標準板張數", pl.sheets], ["鐵板叫料(kg)", +pl.buyKg.toFixed(1)],
+          ["可放噸數(噸)", +tn.capacityPerCurrentSet.toFixed(2)]];
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), "專案摘要");
+      }
+      if (k.has("order")){
+        const meta = { name:p.name, location:p.location, dimsText:"全長 " + e.dims.railLen + " m × 寬 " + e.dims.tieLen + " m ・ 立柱 " + e.dims.colCount + " 支 × " + e.dims.colLen + " m", date: todayDash() };
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(orderSheetAoa(e.ord, meta, pick.extra)), "叫貨");
+      }
+      if (k.has("bom")) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaBOM(e.bom)), "型鋼需求明細BOM");
+      if (k.has("plate")){
+        if (pl.valid) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(plateSheetAoa(pl, e.dims)), "鐵板");
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+          ["已知總噸數(噸)", e.kt], ["已知全長合計(m)", e.kl], ["已知配置寬度(m)", e.kw],
+          ["換算基準(噸/m)", +tn.baseRatio.toFixed(3)], ["寬度係數(本案寬÷已知寬)", +tn.widFactor.toFixed(3)],
+          ["本專案全長(m)", e.dims.railLen], ["可放噸數(噸)", +tn.capacityPerCurrentSet.toFixed(2)]]), "可放噸數");
+      }
+      if (k.has("inv")){
+        if (s.match) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaMatch(s.match)), "供需比對與採購建議");
+        if (s.groupcap) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaGroupCap(s.groupcap)), "可配組數估算");
+      }
       const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-      await offerDownload("型鋼配料_"+p.name+"_"+stamp+".xlsx", new Blob([wbout], { type: "application/octet-stream" }));
+      await offerDownload("型鋼配料_" + p.name + "_" + todayStamp() + ".xlsx", new Blob([wbout], { type: "application/octet-stream" }));
     } catch(e){
       alert("匯出Excel時發生錯誤：" + (e && e.message ? e.message : e));
     }
@@ -4163,7 +4244,7 @@
     return "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
       "<title>" + escHtml(title) + "</title>" + fontLinks + styleBlocks +
       "<style>body{background:#fff;padding:18px;} .wrap{max-width:1100px;margin:0 auto;}" +
-      "button,.invtoolbar,.projbar,.side,.toolbar-export,.modal-overlay,.lightbox-overlay,.stg-zoom,.tabbar,.strip{display:none !important;}.tab-off,.print-only{display:block !important;}.ord-table tr.ord-extra{display:table-row !important;}" +
+      "button,.invtoolbar,.projbar,.side,.toolbar-export,.modal-overlay,.lightbox-overlay,.stg-zoom,.tabbar,#calc-strip{display:none !important;}.tab-off,.print-only{display:block !important;}.ord-table tr.ord-extra{display:table-row !important;}.ord-print-head{display:block !important;}" +
       ".inv-table th:last-child,.inv-table td:last-child{display:none !important;}" +
       "input,select,textarea{pointer-events:none;}</style>" +
       "</head><body><div class=\"wrap\">" + bodyHtml + "</div>" +
@@ -4185,35 +4266,71 @@
     window.print();
   }
 
-  async function printProjectSnapshot(p){
+  // keys: Set of 'info' 'stage' 'order' 'plate' 'tonnage' 'bom' 'match' 'photos'；orderDetail=true 才印各規格方案與切法
+  async function doProjectPrint(p, keys, orderDetail){
     const s = p.summary || {};
-    if (!p.inputs){ alert("這個專案沒有輸入資料，請先用「開啟編輯」帶回計算頁再列印。"); return; }
     const e = projectEffective(p);
     const root = document.getElementById("project-print-root");
+    const onlyOrder = keys.size === 1 && keys.has("order");
+    const photos = keys.has("photos") ? (Array.isArray(p.photos) ? p.photos.filter(ph => ph && ph.dataUrl && ph.dataUrl.indexOf("data:image/gif") !== 0) : []) : [];
     root.innerHTML =
-      "<div class='print-proj-head'><h2>"+escHtml(p.name)+"</h2>" +
-      (p.location ? "<p>地點："+escHtml(p.location)+"</p>" : "") +
-      "<p>儲存時間："+fmtDate(p.savedAt)+"</p></div>" +
-      buildDetailInfoGrid(p, s) + buildProjectSectionsHTML(e, "project-print-stage-host") +
-      (hasInv(s) && s.match ? "<h4 class='detail-section-title'>供需比對與採購建議</h4>" + buildDetailMatchTable(s.match) : "");
-    renderStage(e.dims, document.getElementById("project-print-stage-host"));
+      "<div class='print-proj-head'><h2>" + (onlyOrder ? "型鋼叫貨單｜" : "") + escHtml(p.name) + "</h2>" +
+      (p.location ? "<p>地點：" + escHtml(p.location) + "</p>" : "") +
+      (onlyOrder ? "" : "<p>儲存時間：" + fmtDate(p.savedAt) + "</p>") +
+      "<p>全長 " + fmt(e.dims.railLen) + " m × 寬 " + fmt(e.dims.tieLen) + " m ・ 立柱 " + e.dims.colCount + " 支 × " + fmt(e.dims.colLen) + " m</p></div>" +
+      (keys.has("info") ? buildDetailInfoGrid(p, s) : "") +
+      buildProjectSectionsHTML(e, "project-print-stage-host", { brief: !orderDetail, parts: keys }) +
+      (keys.has("match") && hasInv(s) && s.match ? "<h4 class='detail-section-title'>供需比對與採購建議</h4>" + buildDetailMatchTable(s.match) : "") +
+      (photos.length ? "<h4 class='detail-section-title'>組立照片</h4><div class='print-photos'>" + photos.map(ph => "<img src='" + ph.dataUrl + "' alt='組立照片'>").join("") + "</div>" : "");
+    const stageHost = document.getElementById("project-print-stage-host");
+    if (stageHost) renderStage(e.dims, stageHost);
 
     if (cloudDownloads){
-      // No live <input> fields in this snapshot (all built from strings +
-      // the freshly-rendered SVG), so root.innerHTML can be used as-is.
-      await printOrExportSnapshot("型鋼配料_"+p.name+"_列印", "型鋼配料列印 - "+p.name, root.innerHTML);
+      await printOrExportSnapshot("型鋼配料_" + p.name + "_列印", "型鋼配料列印 - " + p.name, root.innerHTML);
       root.innerHTML = "";
       return;
     }
     const others = Array.from(document.querySelectorAll("[data-print-section]"));
     others.forEach(el => el.classList.add("print-hidden"));
-    root.classList.add("print-active");
+    root.classList.add("print-active"); document.body.classList.add("print-proj");
     window.print();
-    root.classList.remove("print-active");
+    root.classList.remove("print-active"); document.body.classList.remove("print-proj");
     others.forEach(el => el.classList.remove("print-hidden"));
     root.innerHTML = "";
   }
 
+  async function printProjectSnapshot(p){
+    const s = p.summary || {};
+    if (!p.inputs){ alert("這個專案沒有輸入資料，請先用「開啟編輯」帶回計算頁再列印。"); return; }
+    const items = [
+      { key:"info", label:"基本資料與重點數字" },
+      { key:"stage", label:"組立圖" },
+      { key:"order", label:"叫貨資訊" },
+      { key:"plate", label:"鐵板（加強板）" },
+      { key:"tonnage", label:"可放噸數" },
+      { key:"bom", label:"型鋼需求明細（BOM）" }
+    ];
+    if (hasInv(s) && s.match) items.push({ key:"match", label:"供需比對與採購建議" });
+    items.push({ key:"photos", label:"組立照片", def:false });
+    const pick = await pickItems({
+      title:"選擇要列印的內容", sub:"取消勾選的項目不會印出來。叫貨預設只印長度與支數。",
+      items: items, prefKey:"steelCalcProjPrint_v1", okLabel:"開始列印",
+      extra:{ label:"叫貨：同時印出各規格的方案與切法明細" },
+      quick:{ label:"只印叫貨", keys:["order"] }
+    });
+    if (!pick) return;
+    await doProjectPrint(p, pick.keys, pick.extra);
+  }
+
+  async function printProjectOrderOnly(p){
+    if (!p.inputs){ alert("這個專案沒有輸入資料，請先用「開啟編輯」帶回計算頁再列印。"); return; }
+    await doProjectPrint(p, new Set(["order"]), false);
+  }
+
+  document.getElementById("btn-detail-print-order").addEventListener("click", () => {
+    const p = findProject(currentDetailProjectId);
+    if (p) printProjectOrderOnly(p);
+  });
   document.getElementById("btn-detail-export-excel").addEventListener("click", () => {
     const p = findProject(currentDetailProjectId);
     if (p) exportProjectExcel(p);
@@ -4267,6 +4384,49 @@
     else if (!document.getElementById("print-modal-overlay").hidden) closePrintModal();
   });
 
+  // ---------------------------------------------------- 通用「選擇項目」視窗（專案列印／匯出共用）
+  // cfg: { title, sub, items:[{key,label,def}], prefKey, extra:{label}|null, quick:{label,keys:[...]}|null, okLabel }
+  // 回傳 Promise<{keys:Set, extra:boolean}|null>（取消＝null）；勾選結果記在 localStorage（prefKey）。
+  function pickItems(cfg){
+    return new Promise(resolve => {
+      let prefs = {};
+      try { prefs = JSON.parse(localStorage.getItem(cfg.prefKey) || "{}") || {}; } catch(e){ prefs = {}; }
+      const ov = document.createElement("div");
+      ov.className = "modal-overlay";
+      const rows = cfg.items.map((it, i) => {
+        const on = prefs[it.key] !== undefined ? prefs[it.key] !== false : it.def !== false;
+        return "<li><input type='checkbox' id='pk-" + i + "' data-key='" + escHtml(it.key) + "'" + (on ? " checked" : "") + "><label for='pk-" + i + "'>" + escHtml(it.label) + "</label></li>";
+      }).join("");
+      const extraOn = cfg.extra ? prefs._extra === true : false;
+      ov.innerHTML = "<div class='modal-card' role='dialog' aria-modal='true'><button type='button' class='modal-close-x' data-act='cancel' aria-label='關閉'>✕</button>" +
+        "<h3>" + escHtml(cfg.title) + "</h3><p class='modal-sub'>" + escHtml(cfg.sub || "") + "</p>" +
+        "<div class='modal-body-scroll'><ul class='modal-checklist'>" + rows + "</ul>" +
+        (cfg.extra ? "<label style='display:flex;gap:8px;align-items:center;margin:10px 2px 0;font-size:14px;'><input type='checkbox' id='pk-extra'" + (extraOn ? " checked" : "") + "> " + escHtml(cfg.extra.label) + "</label>" : "") +
+        "</div><div class='modal-actions'><button type='button' class='ghost' data-act='cancel'>取消</button>" +
+        (cfg.quick ? "<button type='button' class='ghost' data-act='quick'>" + escHtml(cfg.quick.label) + "</button>" : "") +
+        "<button type='button' class='primary' data-act='ok'>" + escHtml(cfg.okLabel || "確定") + "</button></div></div>";
+      document.body.appendChild(ov);
+      const done = (val) => { document.removeEventListener("keydown", onKey, true); ov.remove(); resolve(val); };
+      const onKey = e => { if (e.key === "Escape"){ e.stopPropagation(); done(null); } };
+      document.addEventListener("keydown", onKey, true);
+      ov.addEventListener("click", e => {
+        if (e.target === ov){ done(null); return; }
+        const act = e.target.getAttribute && e.target.getAttribute("data-act");
+        if (!act) return;
+        if (act === "cancel") return done(null);
+        const boxes = Array.from(ov.querySelectorAll("input[data-key]"));
+        const extraBox = ov.querySelector("#pk-extra");
+        if (act === "quick"){ done({ keys: new Set(cfg.quick.keys), extra: false }); return; }
+        const keys = new Set(boxes.filter(b => b.checked).map(b => b.getAttribute("data-key")));
+        const save = {}; boxes.forEach(b => { save[b.getAttribute("data-key")] = b.checked; });
+        if (extraBox) save._extra = extraBox.checked;
+        try { localStorage.setItem(cfg.prefKey, JSON.stringify(save)); } catch(e){ /* harmless */ }
+        if (!keys.size){ alert("請至少勾選一個項目。"); return; }
+        done({ keys: keys, extra: !!(extraBox && extraBox.checked) });
+      });
+    });
+  }
+
   // ------------------------------------------------------------- print modal
 
   const PRINT_PREFS_KEY = "steelCalcPrintSections_v1";
@@ -4301,24 +4461,46 @@
       li.querySelector("input").dataset.sectionKey = key;
       list.appendChild(li);
     });
+    const od = document.getElementById("print-ord-detail"); if (od) od.checked = prefs._ordDetail === true;
     document.getElementById("print-modal-overlay").hidden = false;
+  }
+  function ordPrintHeadHtml(){
+    const p = currentProjectId ? findProject(currentProjectId) : null;
+    const d = readDims();
+    const name = p ? p.name : "（未存檔的計算草稿）";
+    const t = new Date(); const ds = t.getFullYear() + "/" + String(t.getMonth()+1).padStart(2,"0") + "/" + String(t.getDate()).padStart(2,"0");
+    return "<b>型鋼叫貨單｜" + escHtml(name) + "</b>" + (p && p.location ? "地點：" + escHtml(p.location) + "　" : "") + "全長 " + fmt(d.railLen) + " m × 寬 " + fmt(d.tieLen) + " m　列印日期：" + ds;
   }
   function closePrintModal(){
     document.getElementById("print-modal-overlay").hidden = true;
   }
-  async function confirmPrint(){
+  async function confirmPrint(overridePrefs){
     const list = document.getElementById("print-checklist");
     const checks = Array.from(list.querySelectorAll("input[type=checkbox]"));
     const prefs = {};
-    checks.forEach(chk => { prefs[chk.dataset.sectionKey] = chk.checked; });
-    savePrintPrefs(prefs);
+    checks.forEach(chk => { prefs[chk.dataset.sectionKey] = overridePrefs ? (chk.dataset.sectionKey === "s06o") : chk.checked; });
+    const odBox = document.getElementById("print-ord-detail");
+    if (!overridePrefs) prefs._ordDetail = !!(odBox && odBox.checked);
+    else prefs._ordDetail = false;
+    if (!overridePrefs) savePrintPrefs(prefs);
 
     const sections = collectPrintableSections();
     closePrintModal();
+    const ordSec = document.querySelector('section[data-print-section="s06o"]');
+    const ordHead = document.getElementById("ord-print-head");
+    const brief = !!ordSec && prefs._ordDetail !== true;
+    if (ordSec && prefs["s06o"] !== false){
+      if (ordHead) ordHead.innerHTML = ordPrintHeadHtml();
+      ordSec.classList.toggle("ord-brief", brief);
+    }
+    const includedKeys = sections.map(el => el.getAttribute("data-print-section")).filter(k => prefs[k] !== false);
+    document.body.classList.toggle("print-brief", brief && includedKeys.length === 1 && includedKeys[0] === "s06o");
+    const cleanupOrd = () => { if (ordSec) ordSec.classList.remove("ord-brief"); if (ordHead) ordHead.innerHTML = ""; document.body.classList.remove("print-brief"); };
 
     if (cloudDownloads){
       const included = sections.filter(el => prefs[el.getAttribute("data-print-section")] !== false);
       const bodyHtml = included.map(el => cloneForPrintSnapshot(el).outerHTML).join("\n");
+      cleanupOrd();
       await printOrExportSnapshot("型鋼配料_列印", "型鋼配料列印", bodyHtml);
       return;
     }
@@ -4329,8 +4511,10 @@
     });
     window.print();
     hiddenForPrint.forEach(el => el.classList.remove("print-hidden"));
+    cleanupOrd();
   }
-  document.getElementById("btn-print-confirm").addEventListener("click", confirmPrint);
+  document.getElementById("btn-print-confirm").addEventListener("click", () => confirmPrint());
+  document.getElementById("btn-print-ord-only").addEventListener("click", () => confirmPrint(true));
   document.getElementById("btn-print-cancel").addEventListener("click", closePrintModal);
   document.getElementById("btn-print-close-x").addEventListener("click", closePrintModal);
   document.getElementById("print-modal-overlay").addEventListener("click", e => {
@@ -4396,23 +4580,43 @@
         alert("匯出Excel需要先載入線上程式庫，但目前偵測不到網路連線（或網路阻擋了外部資源）。請確認網路連線後重新整理頁面再試一次；也可以改用旁邊的「列印報表」直接印出或另存PDF。");
         return;
       }
+      const items = [
+        { key:"order", label:"叫貨（長度與支數）" },
+        { key:"bom", label:"型鋼需求明細（BOM）" },
+        { key:"plate", label:"鐵板與噸位快算" }
+      ];
+      if (invOn) items.push({ key:"inv", label:"庫存比對（供需比對、可配組數、庫存清單）" });
+      const pick = await pickItems({
+        title:"選擇要匯出的內容", sub:"勾選的項目會各自成為 Excel 的工作表。",
+        items: items, prefKey:"steelCalcExport_v1", okLabel:"匯出 Excel",
+        extra:{ label:"叫貨：同時匯出各規格的方案與切法明細" },
+        quick:{ label:"只匯出叫貨", keys:["order"] }
+      });
+      if (!pick) return;
+      const k = pick.keys;
       const dims = readDims();
       const bom = computeBOM(dims);
-      const match = computeMatch(bom, inventory, dims.purchaseLen);
-      const gc = computeGroupCapacity(match);
-      const tonnage = computeTonnage(dims);
-
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaBOM(bom)), "型鋼需求明細BOM");
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaMatch(match)), "供需比對與採購建議");
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaGroupCap(gc)), "可配組數估算");
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaTonnage(tonnage)), "噸位快算");
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaInventory(inventory)), "庫存清單");
-
-      const now = new Date();
-      const stamp = now.getFullYear()+String(now.getMonth()+1).padStart(2,"0")+String(now.getDate()).padStart(2,"0");
+      if (k.has("order")){
+        const cp = currentProjectId ? findProject(currentProjectId) : null;
+        const meta = { name: cp ? cp.name : "（未存檔的計算草稿）", location: cp ? cp.location : "", dimsText:"全長 " + dims.railLen + " m × 寬 " + dims.tieLen + " m ・ 立柱 " + dims.colCount + " 支 × " + dims.colLen + " m", date: todayDash() };
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(orderSheetAoa(ordRendered.filter(r => r.sel || r.error), meta, pick.extra)), "叫貨");
+      }
+      if (k.has("bom")) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaBOM(bom)), "型鋼需求明細BOM");
+      if (k.has("plate")){
+        const pl = platCompute(dims, platState);
+        if (pl.valid && pl.perSheet > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(plateSheetAoa(pl, dims)), "鐵板");
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaTonnage(computeTonnage(dims))), "噸位快算");
+      }
+      if (k.has("inv") && invOn){
+        const match = computeMatch(bom, inventory, dims.purchaseLen);
+        const gc = computeGroupCapacity(match);
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaMatch(match)), "供需比對與採購建議");
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaGroupCap(gc)), "可配組數估算");
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoaInventory(inventory)), "庫存清單");
+      }
       const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-      await offerDownload("型鋼配料計算_"+stamp+".xlsx", new Blob([wbout], { type: "application/octet-stream" }));
+      await offerDownload("型鋼配料計算_" + todayStamp() + ".xlsx", new Blob([wbout], { type: "application/octet-stream" }));
     } catch(e){
       alert("匯出Excel時發生錯誤：" + (e && e.message ? e.message : e));
     }
@@ -4438,7 +4642,12 @@
   async function createProjectRecord(name, loc, inputs){
     const data = { name:name, location:loc, savedAt:new Date().toISOString(), inputs:inputs, summary:summaryFromInputs(inputs), photos:[] };
     if (cloudMode){
-      try { const ref = await cloudDb.collection("projects").add(data); if (ref && ref.id) return ref.id; pendingCurrent = { name:name, savedAt:data.savedAt }; return null; }
+      try {
+        const ref = await cloudDb.collection("projects").add(data);
+        // 先把新專案放進本機清單：雲端清單要等下一次同步才會帶回來，這段空檔裡按「儲存」會找不到目前專案
+        if (ref && ref.id && !projects.some(x => x.id === ref.id)) projects.push(normalizeCloudDoc(ref.id, data));
+        if (ref && ref.id) return ref.id;
+        pendingCurrent = { name:name, savedAt:data.savedAt }; return null; }
       catch(e){ alert("建立專案失敗（雲端）：" + (e && e.message ? e.message : e)); throw e; }
     }
     const id = "p" + Date.now() + "_" + Math.random().toString(36).slice(2,7);
